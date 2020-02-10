@@ -11,6 +11,7 @@ def intersection(l1, l2):
     return [v for v in l1 if v in tmp]
 
 CMD = 'ssh'
+VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
 
 class SSHClient(object):
     __REQUIRED__ = ['hostname', 'username']
@@ -25,8 +26,8 @@ class SSHClient(object):
     def keys(self):
         return self.config.keys()
 
-    def get(self, k):
-        return self.config.get(k)
+    def get(self, k, default=None):
+        return self.config.get(k, default)
 
     def is_open(self):
         p = PortScanner(self.config['hostname'])
@@ -38,7 +39,7 @@ class SSHClient(object):
         self.config[k] = v
 
 
-    def __valid__(self):
+    def is_valid(self):
         for r in SSHClient.__REQUIRED__:
             if r not in self.config.keys():
                 logging.error('must has {}'.format(r))
@@ -82,8 +83,10 @@ class SSHClient(object):
 
 
     def connect(self):
-        if not self.__valid__():
+        if not self.is_valid():
             return False
+        # self.client.load_system_host_keys()
+        self.client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy)
         self.client.connect(**self.config)
 
 
@@ -92,7 +95,7 @@ class SSHClient(object):
         self.tunnel = sshtunnel.SSHTunnelForwarder(
             (self.config['hostname'], self.config['port']),
             ssh_pkey = self.config['key_filename'],
-            remote_bind_address=('127.0.0.1', 8080)
+            remote_bind_address=('127.0.0.1', port)
         )
         self.tunnel.start()
 
@@ -113,12 +116,32 @@ class SSHClient(object):
 
 
     def exec_command(self, command):
-        stdin, stdout, stderr = self.client.exec_command(command)
-        return (stdin, stdout, stderr)
+        self.connect()
+        try:
+            _, ss_stdout, ss_stderr = self.client.exec_command(command)
+            r_out, r_err = ss_stdout.readlines(), ss_stderr.readlines()
+        except Exception as e:
+            logging.error(e)
+            return (None, None, None)
+
+        self.close()
+        return (command, r_out, r_err)
 
 
     def exec_file(self, file):
         self.upload(file, remote_path='~/.cache')
         return self.exec_command("bash ~/.cache/{}".format(os.path.basename(file)))
 
+
+
+    def open_vncviewer(self):
+        subprocess.Popen([VNCVIEWER,
+            '{}:{}'.format(self.config['hostname'], 5901)
+        ])
+
+
+    def vncserver_list(self):
+        (din, out, err) = self.exec_command('vncserver -list')
+        if not out: return []
+        return out
 
