@@ -1,0 +1,5 @@
+paramiko
+sshtunnel
+scp
+requests
+socket

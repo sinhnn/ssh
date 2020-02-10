@@ -1,0 +1,4 @@
+{
+	"name" : "Youtube",
+	"value"  : "firefox --new-tab https://youtube.com"
+}

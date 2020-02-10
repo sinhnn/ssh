@@ -5,10 +5,95 @@
 # from PyQt5 import QtGui
 # from PyQt5 import QtWidgets
 from PyQt5.QtCore import (Qt, QAbstractTableModel, QModelIndex, QVariant)
-from PyQt5 import QtCore
+from PyQt5 import QtCore #, QtWidgets
 import logging
 import threading
 import time
+
+
+class ComboBoxModel(QtCore.QAbstractItemModel):
+    '''
+        Model list of item for Combobox
+            - name
+            - value
+    '''
+    def __init__(self, data=[], parent=None, **kwargs):
+        QtCore.QAbstractItemModel.__init__(self, **kwargs)
+        self._header = ['name', 'value']
+        self._parent = parent
+        self._data = data
+
+    def parent(self, index):
+        if not index.isValid():
+            return  QModelIndex()
+        return QModelIndex() #TODO
+        self.createIndex(index.row(), 0, self._parent)
+
+    def index(self, row, col, parent):
+        return self.createIndex(row, col, parent)
+
+    def rowCount(self, parent):
+        if parent.column() > 0:
+            return 0
+
+        if not parent.isValid():
+            parentItem = self.rootItem
+        else:
+            parentItem = parent.internalPointer()
+
+        return parentItem.childCount()
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            logging.debug("invalid index")
+            return  QVariant() 
+        elif not 0 <= index.row() < len(self._data):
+            logging.debug("row is out of data range")
+            return QVariant()
+        elif role not in [Qt.DisplayRole, Qt.EditRole]:
+            return QVariant()
+        elif role in [Qt.DisplayRole, Qt.EditRole]:
+            try:
+                name = self._data[index.row()]['name']
+                return str(name)
+            except Exception as e:
+                return ''
+        return QVariant()
+
+    def columnCount(self, parent=QModelIndex()):
+        return 1
+
+    def rowCount(self, parent=QModelIndex()): 
+        return len(self._data)
+        
+    def insertRows(self, position, rows=1, index=QModelIndex()):
+        self.beginInsertRows(QModelIndex(), position, position + rows - 1)
+        for row in range(rows):
+            self._data.insert(position + row, {key: None for key in self._header})
+        self.endInsertRows()
+        return True
+
+    def itemAtRow(self, row):
+        if row >= self.rowCount() or row < 0:
+            logging.error('invalid index')
+            return None
+        return self._data[row]
+
+    def appendItem(self, item):
+        self.beginInsertRows(QModelIndex(), self.rowCount() - 1, self.rowCount() - 1)
+        self._data.append(item)
+        self.endInsertRows()
+        return True
+
+    def flags(self, index):
+        """ Set the item flags at the given index. Seems like we're 
+            implementing this function just to see how it's done, as we 
+            manually adjust each tableView to have NoEditTriggers.
+        """
+        if not index.isValid():
+            return Qt.ItemIsEnabled
+        return Qt.ItemFlags(QtCore.QAbstractItemModel.flags(self, index) | Qt.ItemIsEditable)
+
 
 class ObjectsTableModel(QtCore.QAbstractTableModel):
     def __init__(self, data, **kwargs):

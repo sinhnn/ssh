@@ -28,6 +28,12 @@ class SSHClient(object):
     def get(self, k):
         return self.config.get(k)
 
+    def is_open(self):
+        p = PortScanner(self.config['hostname'])
+        p.timeout = 1.0
+        port = self.config.get('port', 22)
+        return p.isOpen(port)
+
     def update(self, k, v):
         self.config[k] = v
 
@@ -57,15 +63,22 @@ class SSHClient(object):
         self.client.close()
 
 
-    def __upload_file__(self, file, remote_path):
+    def upload(self, files, remote_path):
+        results = {'done': [], 'failed' : []}
         try:
             scp = SCPClient(self.client.get_transport())
-            self.scp.put(file, recursive=bool(os.path.isdir(file)), remote_path=remote_path)
+            for f in files:
+                try:
+                    self.scp.put(f, recursive=bool(os.path.isdir(file)), remote_path=remote_path)
+                    self.results['done'].append(f)
+                except SCPException as error:
+                    self.results['failed'].append(f)
+                    logging.error()
         except SCPException as error:
             logging.error(error)
         finally:
             scp.close()
-            return file
+            return results
 
 
     def connect(self):
@@ -105,7 +118,7 @@ class SSHClient(object):
 
 
     def exec_file(self, file):
-        self.__upload_file__(file, remote_path='~/.cache')
+        self.upload(file, remote_path='~/.cache')
         return self.exec_command("bash ~/.cache/{}".format(os.path.basename(file)))
 
 
