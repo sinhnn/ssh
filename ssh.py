@@ -1,4 +1,4 @@
-import os,sys,subprocess, platform
+import os,sys,subprocess, platform, threading, time
 import json
 import logging
 
@@ -15,7 +15,7 @@ __PATH__ = os.path.dirname(os.path.abspath(__file__))
 if platform.system() == "Windows":
     CMD = "ssh"
     VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
-    VNCSNAPSHOT = os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' )
+    VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
 elif platform.system() == "Linux":
     CMD = "ssh"
     VNCVIEWER = 'vncviewer'
@@ -30,15 +30,24 @@ def intersection(l1, l2):
     return [v for v in l1 if v in tmp]
 
 
-MAP_SSHTUNNEL_SSHCLIENT = {'ssh_pkey' : 'key_filename',
-    'ssh_pkey' : 'pkey',
-    'ssh_password' : 'password',
-    'ssh_private_key_password' : 'passphrase'
-}
+class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
+    """Docstring for SSHTunnelForwarder. """
+    def __init__(self, **kwargs):
+        sshtunnel.SSHTunnelForwarder.__init__(self, **kwargs)
+        self.config = kwargs
 
+    def get(self, key, default=None):
+        return self.config.get(key, default)
 
-from collections import namedtuple
-TunnelPath = namedtuple('TunnelPath', ['SSHTunnelForwarder', 'path'])
+    def local_bind_address_str(self):
+        return '{}:{}'.format(self.local_bind_host, self.local_bind_port)
+    def __eq__(self, other):
+        for info in ['remote_bind_address']:
+            n = self.get(info)
+            o = other.get(info)
+            if n != o:
+                return False
+        return True
 
 class SSHClient(object):
     '''
@@ -47,24 +56,26 @@ class SSHClient(object):
     __REQUIRED__ = ['hostname', 'username']
     __ANY__ = [['password', 'key_filename', 'pkey']]
 
-    # running tunnel port
-    __RUNNING_PORT__ = []
-
-    def __init__(self, config, fileConfig=None, **kwargs):
+    def __init__(self, config, fileConfig=None, vncthumb=True, **kwargs):
         self.config = config
+        self.vncthumb = vncthumb
         self.status = {'screenshot' : None,  'vncserver': []}
         self.client = paramiko.SSHClient()
 
         self.tunnels = []
 
-        self.tunnel = None
-        self.tunnel_port = 0
-
-        self.tunnel4vnc = None
-        self.tunnel4vnc_port = None
-
         self.portscanner = PortScanner()
         self.processes = [] # store all child process
+
+        self.__daemon__()
+
+
+    def __daemon__(self):
+        self.threads = []
+        for  t in [self.update_vncthumnail]:
+            thread = threading.Thread(target=t)
+            thread.daemon = True
+            thread.start()
 
     def keys(self):
         return self.config.keys()
@@ -76,12 +87,6 @@ class SSHClient(object):
         elif k in self.status.keys():
             return self.status[k]
         return default
-
-    # def is_open(self):
-    #     p = PortScanner(self.config['hostname'])
-    #     p.timeout = 1.0
-    #     port = self.config.get('port', 22)
-    #     return p.isOpen(port)
 
     def update(self, k, v):
         if k in self.status.keys():
@@ -106,10 +111,13 @@ class SSHClient(object):
 
     def __del__(self):
         self.close()
-        if self.tunnel:
-            self.tunnel.stop()
+        for t in self.tunnels:
+            t.stop()
         for p in self.processes:
             p.terminate()
+        for t in self.threads:
+            t.stop()
+            t.join()
 
 
     def close(self):
@@ -153,22 +161,25 @@ class SSHClient(object):
 
     # https://sshtunnel.readthedocs.io/en/latest/
     def create_tunnel(self, port=None, **kwargs):
-        if not port:
-            port = self.portscanner.getAvailablePort(range(5000, 6000))
+        # if not port:
+        print("automatic port")
+        port = self.portscanner.getAvailablePort(range(5000, 6000))
+
         try:
-            # sshtunnel pick a randome port
-            # ssh_password = 'empty', \
-            # ssh_private_key_password = 'empty',
             local_bind_address = ('127.0.0.1', port)
-            tunnel = sshtunnel.SSHTunnelForwarder(
-                (self.config['hostname'], self.config.get('port', 22)), \
-                ssh_pkey = self.config['key_filename'], \
-                set_keepalive=30,
+            tunnel = SSHTunnelForwarder(
+                ssh_address_or_host = (self.config['hostname'], self.config.get('port', 22)), \
+                ssh_pkey = self.config.get('key_filename'), \
+                ssh_username = self.config['username'], \
+                ssh_password = self.config.get('password'), \
+                set_keepalive=30, \
+                local_bind_address = local_bind_address, \
                 **kwargs
             )
-            tunnel.start()
-            self.tunnels.append(tunnel)
-            return True
+            p = tunnel.start()
+            if tunnel:
+                self.tunnels.append(tunnel)
+            return tunnel
         except Exception as e:
             logging.error(e, exc_info=True)
             return False
@@ -208,35 +219,54 @@ class SSHClient(object):
         return self.exec_command("bash ~/.cache/{}".format(os.path.basename(file)))
 
 
+    def __get_vnctunnel__(self):
+        remote_bind_address = ('127.0.0.1', 5901)
+        ts = []
+        for t in self.tunnels:
+            if isinstance(t, SSHTunnelForwarder):
+                if t.is_alive and t.get('remote_bind_address') == remote_bind_address:
+                    ts.append(t)
+
+        if ts: print("Found running tunnel")
+        if not ts:
+            _  = self.create_tunnel(remote_bind_address=remote_bind_address)
+            if _: ts.append(_)
+        return ts
+
+
     def open_vncviewer(self):
         try:
-            self.create_tunnel(remote_bind_address=('127.0.0.1', 5901))
-            subprocess.Popen([VNCVIEWER, '{}:{}'.format('127.0.0.1', 5901)])
+            print(self.config['hostname'])
+            ts = self.__get_vnctunnel__()
+            subprocess.Popen([VNCVIEWER, ts[0].local_bind_address_str()])
+
         except FileNotFoundError:
             logging.error('vncviewer not found')
         except Exception as e:
             logging.error(e, exc_info=True)
 
-    def vncsnapshot(self, port):
+    def update_vncthumnail(self):
+        while (True):
+            if self.vncthumb: self.vncsnapshot()
+            time.sleep(60)
+
+    def vncsnapshot(self):
+        # vncsnapshot -tunnel only available in Linux
         def create_thumbnail(image):
-            idata = cv.imread(image)
+            idata = cv2.imread(image)
             resize = cv2.resize(idata, (320,180), interpolation = cv2.INTER_AREA)
             thumbnailFile =  os.path.splitext(image)[0] + '.thumbnail.jpg'
-            cv.imwrite(thumbnailFile)
+            cv2.imwrite(thumbnailFile)
             return thumbnailFile
 
-        # create ssh tunnel mapting localport:server:5901
-        self.create_tunnel4vnc()
-        if not self.tunnel4vnc:
-            return False
-
+        ts = self.__get_vnctunnel__()
         screenshotFile = '{}.jpg'.format(self.config['hostname'])
-        args = [VNCSNAPSHOT,
-                '127.0.0.1:{}'.format(self.tunnel4vnc_port),
-                screenshotFile
-        ]
-        subprocess.Popen(args)
-        self.status['icon'] = create_thumbnail(screenshotFile)
+        args = [VNCSNAPSHOT, ts[0].local_bind_address_str(), screenshotFile]
+        p = subprocess.call(args)
+        if os.path.isfile(screenshotFile):
+            self.status['icon'] = create_thumbnail(screenshotFile)
+        elif 'icon' in self.status.keys():
+            del self.status['icon']
 
 
     def vncserver(self, x):
