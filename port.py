@@ -45,4 +45,8 @@ def find_proc(afilter, break_on_matched=True):
         except PermissionError:
             pass
     return matched
- 
+
+if __name__ == "__main__":
+    p = PortScanner()
+    r = p.scan()
+    print(r)

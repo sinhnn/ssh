@@ -201,7 +201,7 @@ class SSHTable(QTableView):
 def main(): 
     import logging
     logging.basicConfig(level=logging.INFO,
-            format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s %(message)s', datefmt='%m-%d %H:%M')
+            format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
 
     app = QApplication(sys.argv) 
     w = SSHTable() 

@@ -1,7 +1,8 @@
 import os, sys, threading, subprocess
 from PyQt5 import QtWidgets, QtCore, QtGui
 
-
+from worker import Worker
+from threading import Thread
 
 class ListModel(QtCore.QAbstractListModel):
     """Docstring for ListModel. """
@@ -13,6 +14,8 @@ class ListModel(QtCore.QAbstractListModel):
     def rowCount(self, parent):
         return len(self.__data__)
 
+    def itemAtRow(self, i):
+        return self.__data__[i]
         
     def data(self, index, role = QtCore.Qt.DisplayRole):
         if not index.isValid():
@@ -56,6 +59,11 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setSpacing(5)
         self.setUniformItemSizes(True)
 
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+
+        self.doubleClicked.connect(self.open)
+
+        self.threadpool = QtCore.QThreadPool()
         self.initUI()
 
     def initUI(self):
@@ -64,12 +72,73 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setSpacing(5)
         self.setUniformItemSizes(True)
 
+        self.menu = QtWidgets.QMenu(self)
+        self.actions = {
+            'open' : self.open_vncviewer,
+            'edit' : self.open_vncviewer,
+            'upload' : self.upload,
+            'command' : self.exec_command, # from file or command
+        }
+        for k, v in self.actions.items():
+            self.menu.addAction(k, v)
+
+
+    def contextMenuEvent(self, event): 
+        self.menu.popup(QtGui.QCursor.pos())
+        self.menu.exec_(QtGui.QCursor.pos())
+
+
+    def __event2item__(self, event):
+        print(event.pos())
+        row = self.rowAt(event.pos().y())
+        return self.model().itemAtRow(row)
+
+    def selectedItems(self):
+        return [self.model().itemAtRow(i.row()) for i in self.selectedIndexes()]
+
+    def exec_command(self):
+        dialog = ChooseCommandDialog(parent=self)
+        r = dialog.getResult()
+        if not r: return
+        for item in self.selectedItems():
+            worker = Worker(item.exec_command, r)
+            self.threadpool.start(worker)
+            # (din, out, err) = item.exec_command(r)
+            # # print(din, out, err)
+
+    def open_vncviewer(self):
+        for item in self.selectedItems():
+            worker = Worker(item.open_vncviewer)
+            self.threadpool.start(worker)
+
+    def upload(self):
+        dialog = QtWidgets.QFileDialog(self)
+        dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True);
+        dialog.setFileMode(QtWidgets.QFileDialog.Directory |
+                QtWidgets.QFileDialog.ExistingFiles)
+        files, _ = dialog.getOpenFileNames(self, 'Upload files')
+        if not files: return
+
+        for item in self.selectedItems():
+            print(item)
+            # item.upload(files)
+
+    def download(self, path):
+        for item in self.selectedItems():
+            print(item)
+
+    def open(self):
+        self.open_vncviewer()
+            
+    def close(self):
+        for item in self.selectedItems():
+            item.close()
 
 
 def main(): 
     import logging
     logging.basicConfig(level=logging.INFO,
-            format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s %(message)s', datefmt='%m-%d %H:%M')
+        format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
 
     app = QtWidgets.QApplication(sys.argv) 
     w = ThumbnailListViewer() 
