@@ -4,6 +4,9 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from worker import Worker
 from threading import Thread
 
+from common import close_all
+
+
 class ListModel(QtCore.QAbstractListModel):
     """Docstring for ListModel. """
     def __init__(self, data=[], parent=None, **kwargs):
@@ -23,7 +26,7 @@ class ListModel(QtCore.QAbstractListModel):
 
         item = self.__data__[index.row()]
         if role == QtCore.Qt.DisplayRole:
-            return item.get('hostname')
+            return item.get('hostname') + '\n' + item.get('tag','')
 
         elif role == QtCore.Qt.DecorationRole:
             return QtGui.QIcon(item.get('icon', 'icon/computer.png'))
@@ -55,9 +58,10 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setLayoutMode(QtWidgets.QListView.SinglePass)
         self.setResizeMode(QtWidgets.QListView.Adjust)
 
-        self.setIconSize(QtCore.QSize(320, 180))
-        self.setSpacing(5)
-        self.setUniformItemSizes(True)
+        self.setGridSize(QtCore.QSize(320, 260))
+        self.setIconSize(QtCore.QSize(320, 260))
+        self.setSpacing(2)
+        self.setUniformItemSizes(False)
 
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
@@ -69,8 +73,6 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def initUI(self):
         model = ListModel(load_ssh_dir(self.dir))
         self.setModel(model)
-        self.setSpacing(5)
-        self.setUniformItemSizes(True)
 
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
@@ -136,7 +138,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
 def main(): 
     import logging
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=logging.INFO, filename='log.txt',
         format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
 
     app = QtWidgets.QApplication(sys.argv) 
@@ -144,7 +146,9 @@ def main():
     # w.setFixedWidth(1800)
     # w.setFixedHeight(1000)
     w.show() 
-    sys.exit(app.exec_()) 
+    r = app.exec_()
+    close_all = True
+    sys.exit(r) 
 	
 if __name__ == "__main__": 
     main()
