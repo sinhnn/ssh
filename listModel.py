@@ -89,7 +89,6 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
 
     def __event2item__(self, event):
-        print(event.pos())
         row = self.rowAt(event.pos().y())
         return self.model().itemAtRow(row)
 
