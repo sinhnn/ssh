@@ -324,7 +324,6 @@ class SSHClient(object):
 
     def open_vncviewer(self):
         try:
-            print(self.__s__('open_vncviewer'))
             ts = self.__get_vnctunnel__()
             if not ts: 
                 logging.error(self.__s__('unable to create tunnel for VNC'))
@@ -367,15 +366,23 @@ class SSHClient(object):
         elif 'icon' in self.status.keys():
             del self.status['icon']
 
-    def vncscreenshot(self):
-        self.exec_command('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg')
-        time.sleep(2)
-        local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        self.download(remote_path='~/screenshot_1-thumb.jpg', local_path=local_path)
-        if os.path.isfile(local_path):
-            self.status['icon'] = local_path
-        elif 'icon' in self.status.keys():
+    def __delete_icon__(self):
+        if 'icon' in self.status.keys():
             del self.status['icon']
+
+    def vncscreenshot(self):
+        local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
+        command = self.exec_command('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg')[0]
+        if command == False:
+            try: os.remove(local_path)
+            except: pass
+            return self.__delete_icon__()
+
+        time.sleep(2)
+        self.download(remote_path='~/screenshot_1-thumb.jpg', local_path=local_path)
+
+        if os.path.isfile(local_path): self.status['icon'] = local_path
+        else: self.__delete_icon__()
 
 
     def vncserver(self, x):
@@ -388,7 +395,7 @@ class SSHClient(object):
         ]
         command = ' '.join(args)
         (c, out, err) = self.exec_command(command)
-        if c == False: return False
+        return c
 
 
     def vncserver_list(self):
