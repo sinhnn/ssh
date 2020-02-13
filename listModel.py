@@ -14,6 +14,12 @@ class ListModel(QtCore.QAbstractListModel):
         self.__data__ = data
 
 
+    def getData(self):
+        return self.__data__
+
+    def count(self):
+        return len(self.__data__)
+
     def rowCount(self, parent):
         return len(self.__data__)
 
@@ -43,7 +49,6 @@ class ListModel(QtCore.QAbstractListModel):
 
 
 from sshTable import ChooseCommandDialog, load_ssh_dir
-
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 class ThumbnailListViewer(QtWidgets.QListView):
@@ -53,17 +58,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
         QtWidgets.QListView.__init__(self, parent, **kwargs)
         self.dir = dir
 
-        self.setViewMode(QtWidgets.QListView.IconMode)
-        self.setFlow(QtWidgets.QListView.LeftToRight)
-        self.setLayoutMode(QtWidgets.QListView.SinglePass)
-        self.setResizeMode(QtWidgets.QListView.Adjust)
-
-        self.setGridSize(QtCore.QSize(320, 260))
-        self.setIconSize(QtCore.QSize(320, 260))
-        self.setSpacing(2)
-        self.setUniformItemSizes(False)
-
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.setIconView()
 
         self.doubleClicked.connect(self.open)
 
@@ -84,6 +80,25 @@ class ThumbnailListViewer(QtWidgets.QListView):
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
 
+    def setIconView(self):
+        self.setViewMode(QtWidgets.QListView.IconMode)
+        self.setFlow(QtWidgets.QListView.LeftToRight)
+        self.setLayoutMode(QtWidgets.QListView.SinglePass)
+        self.setResizeMode(QtWidgets.QListView.Adjust)
+
+        self.setGridSize(QtCore.QSize(320, 260))
+        self.setIconSize(QtCore.QSize(320, 260))
+        self.setSpacing(2)
+        self.setUniformItemSizes(False)
+
+    def setListView(self):
+        self.setGridSize(QtCore.QSize(100, 60))
+        self.setIconSize(QtCore.QSize(96, 54))
+        self.setViewMode(QtWidgets.QListView.ListMode)
+        self.setFlow(QtWidgets.QListView.TopToBottom)
+        self.setLayoutMode(QtWidgets.QListView.SinglePass)
+        self.setResizeMode(QtWidgets.QListView.Adjust)
+        self.setSpacing(2)
 
     def contextMenuEvent(self, event): 
         self.menu.popup(QtGui.QCursor.pos())
@@ -104,8 +119,6 @@ class ThumbnailListViewer(QtWidgets.QListView):
         for item in self.selectedItems():
             worker = Worker(item.exec_command, r)
             self.threadpool.start(worker)
-            # (din, out, err) = item.exec_command(r)
-            # # print(din, out, err)
 
     def open_vncviewer(self):
         for item in self.selectedItems():
