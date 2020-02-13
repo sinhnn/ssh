@@ -124,15 +124,18 @@ def __load_ssh_file__(path):
  
 
 class SSHTable(QTableView):
-    def __init__(self, dir=__SSH_DIR__, **kwargs):
+    def __init__(self, data=[], dir=__SSH_DIR__, **kwargs):
         QTableView.__init__(self, **kwargs)
-        self.dir = dir
-
+        # self.dir = dir
+        self.data = data
+        if not self.data:
+            self.data = load_ssh_dir(dir)
+            self.dir = dir
         self.createTable()
 
     def createTable(self):
         self.horizontalHeader().setStretchLastSection(True);
-        tm = MyTableModel(data=load_ssh_dir(self.dir), parent=self) 
+        tm = MyTableModel(data=self.data, parent=self) 
         self.setModel(tm)
         self.setSortingEnabled(True)
 
