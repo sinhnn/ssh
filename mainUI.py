@@ -1,0 +1,165 @@
+import sys,traceback,os
+from PyQt5.QtCore import pyqtSignal
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QApplication, QWidget
+
+from listModel import ThumbnailListViewer
+from sshTable import SSHTable
+
+def changeBackgroundColor(widget, colorString):
+    widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+    style = "background-color: %s;" % colorString
+    widget.setStyleSheet(style)
+
+def getAppIcon():
+    return QtGui.QIcon('icons/computer.png')
+    
+
+def timedeltaToString(deltaTime):
+    s = deltaTime.seconds
+    hours, remainder = divmod(s, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return '%s:%s:%s' % (hours, minutes, seconds)
+
+
+class MainFrame(QtWidgets.QMainWindow):
+    MODE_ACTIVE = 2
+    signalActive = pyqtSignal()
+    
+    def __init__(self, aPath=None):
+        self.__initalMode = 0
+        super(MainFrame, self).__init__()
+        self.setWindowIcon(getAppIcon())
+        # self.settings = SettingsModel(self)
+        self.initUI()
+        # self._widgets = self.initUI()
+        self.centerWindow()
+        self.setMinimumSize(1800,1000)
+   
+    def initUI(self):
+        widgets = ThumbnailListViewer()
+        self.search = QtWidgets.QLineEdit(self) 
+        self.search.textChanged.connect(self.on_search)
+        self.table = SSHTable(widgets.model().getData())
+        self.table.setMinimumSize(800,600)
+        self.table.setWindowTitle('SSH Table')
+        self.setCentralWidget(widgets);
+        self._widgets = widgets
+        self.setIconView()
+
+        self.exitAction = QtWidgets.QAction('Exit', self)
+        self.exitAction.setShortcut('Ctrl+Q')
+        self.exitAction.triggered.connect(QApplication.quit)
+
+        self.loadAction = QtWidgets.QAction('Load Directory', self)
+        self.loadAction.triggered.connect(self.loadDir)
+
+        self.iconViewAction = QtWidgets.QAction('Icon View', self)
+        self.iconViewAction.triggered.connect(self.setIconView)
+
+        self.detailViewAction = QtWidgets.QAction('List View', self)
+        self.detailViewAction.triggered.connect(self.setListView)
+
+        QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"),
+                self).activated.connect(lambda : self.search.setFocus())
+
+        QtWidgets.QShortcut(QtGui.QKeySequence("escape"),
+                self).activated.connect(lambda : self.search.clear())
+
+        self.openSSHTableAction = QtWidgets.QAction('Open Table', self)
+        self.openSSHTableAction.triggered.connect(lambda : self.table.setVisible(True))
+
+        self.toolbar = self.addToolBar('Main')
+        self.toolbar.addAction(self.iconViewAction)
+        self.toolbar.addAction(self.detailViewAction)
+        self.toolbar.addAction(self.openSSHTableAction)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(self.search)
+        self.toolbar.addSeparator()
+                              
+        menubar = self.menuBar()
+        fileMenu = menubar.addMenu('&File')
+        fileMenu.addAction(self.loadAction)
+        fileMenu.addSeparator();
+        fileMenu.addAction(self.exitAction)
+
+        self.setWindowTitle("....")
+
+    def on_search(self, event):
+        for i in range(self._widgets.model().count()):
+            item = self._widgets.model().itemAtRow(i)
+            hide = not (str(event) in str(item.config))
+            self._widgets.setRowHidden(i, hide)
+    
+    def setIconView(self):
+        self._widgets.setIconView()
+        # self._widgets.setHidden(False)
+        # self.table.setHidden(True)
+
+    def setListView(self):
+        # self._widgets.setHidden(True)
+        # self.table.setHidden(False)
+        self._widgets.setListView()
+        
+    def centerWindow(self):
+        frameGm = self.frameGeometry()
+        screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
+        centerPoint = QApplication.desktop().screenGeometry(screen).center()
+        frameGm.moveCenter(centerPoint)
+        self.move(frameGm.topLeft())
+    
+    def updateWindowTitle(self, text):
+        self.setWindowTitle("VideoCut - " + text)
+    
+    
+    def showWarning(self, aMessage):
+        pad = '\t'
+        QtWidgets.QMessageBox.warning(self, "Warning!", aMessage + pad)
+    
+    #-------- ACTIONS ----------
+    def loadDir(self):
+        pass
+            
+    def getErrorDialog(self, text, infoText, detailedText):
+        dlg = QtWidgets.QMessageBox(self)
+        dlg.setIcon(QtWidgets.QMessageBox.Warning)
+        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setWindowTitle("Error")
+        dlg.setText(text)
+        dlg.setInformativeText(infoText)
+        dlg.setDetailedText(detailedText)
+        dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        layout = dlg.layout()
+        layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
+        return dlg
+    
+    def getMessageDialog(self, text, infoText):
+        # dlg = DialogBox(self)
+        dlg = QtWidgets.QMessageBox(self)
+        dlg.setIcon(QtWidgets.QMessageBox.Information)
+        dlg.setWindowModality(QtCore.Qt.WindowModal)
+        dlg.setWindowTitle("Notice")
+        dlg.setText(text)
+        dlg.setInformativeText(infoText)
+        dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        # Workaround to resize a qt dialog. WTF!
+        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        layout = dlg.layout()
+        layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
+        
+        # dlg.setMinimumSize(450, 0)
+        return dlg;
+
+
+if __name__ == '__main__':
+    argv = sys.argv
+    app = QApplication(argv)
+    app.setWindowIcon(getAppIcon())
+    w = MainFrame()
+    # screenrect = QApplication::desktop().screenGeometry();
+    w.move(0,0)
+    w.show()
+    app.exec_()
+
+
