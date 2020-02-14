@@ -13,7 +13,6 @@ class ListModel(QtCore.QAbstractListModel):
         QtCore.QAbstractListModel.__init__(self, parent, **kwargs)
         self.__data__ = data
 
-
     def getData(self):
         return self.__data__
 
@@ -32,7 +31,7 @@ class ListModel(QtCore.QAbstractListModel):
 
         item = self.__data__[index.row()]
         if role == QtCore.Qt.DisplayRole:
-            return item.get('hostname') + '\n' + item.get('tag','')
+            return str(item)#item.get('hostname') + '\n' + item.get('tag','')
 
         elif role == QtCore.Qt.DecorationRole:
             return QtGui.QIcon(item.get('icon', 'icon/computer.png'))
@@ -46,6 +45,22 @@ class ListModel(QtCore.QAbstractListModel):
         else:
             return QtCore.Qt.ItemIsDropEnabled |\
                    QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
+
+    def sort(self, order):
+        try:
+            self.layoutAboutToBeChanged.emit()
+            self.__data__.sort(key=lambda item : item.get('hostname'),  reverse=not order)
+            self.layoutChanged.emit()
+        except Exception as e:
+            logging.error(e)
+
+    def sort_by(self, key, order):
+        try:
+            self.layoutAboutToBeChanged.emit()
+            self.__data__.sort(key=lambda item : item.get(key, 'Z'),  reverse=not order)
+            self.layoutChanged.emit()
+        except Exception as e:
+            logging.error(e)
 
 
 from sshTable import ChooseCommandDialog, load_ssh_dir
@@ -147,7 +162,6 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def close(self):
         for item in self.selectedItems():
             item.close()
-
 
 def main(): 
     import logging

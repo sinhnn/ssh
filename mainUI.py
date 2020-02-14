@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QApplication, QWidget
 
 from listModel import ThumbnailListViewer
 from sshTable import SSHTable
+import logging
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -39,7 +40,19 @@ class MainFrame(QtWidgets.QMainWindow):
     def initUI(self):
         widgets = ThumbnailListViewer()
         self.search = QtWidgets.QLineEdit(self) 
+        self.search.setPlaceholderText("Enter address/tags to search")
         self.search.textChanged.connect(self.on_search)
+
+        self.sort_order = True
+        self.sort_order_button = QtWidgets.QToolButton() 
+        self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
+        self.sort_order_button.clicked.connect(self.re_sort)
+        self.sort_by = QtWidgets.QLineEdit(self) 
+        self.sort_by.setPlaceholderText("Enter key to sort")
+        self.sort_by.editingFinished.connect(self.on_sort)
+        self.sort_by.setMaximumWidth(300)
+
+
         self.table = SSHTable(widgets.model().getData())
         self.table.setMinimumSize(800,600)
         self.table.setWindowTitle('SSH Table')
@@ -60,6 +73,10 @@ class MainFrame(QtWidgets.QMainWindow):
         self.detailViewAction = QtWidgets.QAction('List View', self)
         self.detailViewAction.triggered.connect(self.setListView)
 
+        self.sortByNameAction = QtWidgets.QAction('Sort by Name', self)
+        self.sortByNameAction.triggered.connect(self.on_sort_by_name)
+
+
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"),
                 self).activated.connect(lambda : self.search.setFocus())
 
@@ -75,6 +92,10 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.openSSHTableAction)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
+        self.toolbar.addAction(self.sortByNameAction)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(self.sort_by)
+        self.toolbar.addWidget(self.sort_order_button)
         self.toolbar.addSeparator()
                               
         menubar = self.menuBar()
@@ -84,6 +105,21 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addAction(self.exitAction)
 
         self.setWindowTitle("....")
+
+    def re_sort (self):
+        if self.sort_order:
+            self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
+        else:
+            self.sort_order_button.setArrowType(QtCore.Qt.UpArrow)
+        self.sort_order = not self.sort_order
+        self.on_sort()
+
+    def on_sort_by_name(self):
+        self.sort_order = not self.sort_order
+        self._widgets.model().sort(self.sort_order)
+
+    def on_sort(self):
+        self._widgets.model().sort_by(self.sort_by.text(), self.sort_order)
 
     def on_search(self, event):
         for i in range(self._widgets.model().count()):
@@ -161,5 +197,4 @@ if __name__ == '__main__':
     w.move(0,0)
     w.show()
     app.exec_()
-
 
