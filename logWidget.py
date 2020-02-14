@@ -48,6 +48,7 @@ class LogWidget(QWidget):
         self.initLogFileChooser()
         self.initLogDisplay()
         self.layout.addWidget(self.displayLog)
+        self.layout.setStretch(1,1)
         self.setLayout(self.layout) 
         self.initShortcut()
         self.show()
@@ -115,6 +116,9 @@ class LogWidget(QWidget):
         self.highlighter = KeywordHighlighter(self.displayLog.document())
         self.displayLog.verticalScrollBar().setValue(self.displayLog.verticalScrollBar().maximum())
         self.displayLog.moveCursor(QTextCursor.End)
+        self.displayLog.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Expanding)
+        # self.displayLog.setHorizontal(QtWidgets.QSizePolicy.Expanding)
 
     def _full_log(self, full):
         if full == False:

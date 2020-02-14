@@ -3,3 +3,4 @@ sshtunnel
 scp
 requests
 socket
+tailer

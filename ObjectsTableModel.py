@@ -75,7 +75,7 @@ class ComboBoxModel(QtCore.QAbstractItemModel):
 
     def itemAtRow(self, row):
         if row >= self.rowCount() or row < 0:
-            logging.error('invalid index')
+            logging.error('invalid index', exc_info=True)
             return None
         return self._data[row]
 
@@ -203,7 +203,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                 self.dataChanged.emit(index, index)
                 return True
             except Exception as e:
-                logging.error('unable to set data because of {}'.format(e))
+                logging.error('unable to set data\n{}'.format(e),exc_info=True )
                 pass
         return False
 
@@ -223,4 +223,4 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
             self._data.sort(key=lambda item : item.get(self._header[col]),  reverse=not order)
             self.layoutChanged.emit()
         except Exception as e:
-            logging.error(e)
+            logging.error(e, exc_info=True)

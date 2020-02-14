@@ -59,7 +59,7 @@ class ListModel(QtCore.QAbstractListModel):
             self.__data__.sort(key=lambda item : item.get('hostname'),  reverse=not order)
             self.layoutChanged.emit()
         except Exception as e:
-            logging.error(e)
+            logging.error(e, exc_info=True)
 
     def sort_by(self, key, order):
         try:
@@ -67,7 +67,7 @@ class ListModel(QtCore.QAbstractListModel):
             self.__data__.sort(key=lambda item : item.get(key, 'Z'),  reverse=not order)
             self.layoutChanged.emit()
         except Exception as e:
-            logging.error(e)
+            logging.error(e, exc_info=True)
 
 
 from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file

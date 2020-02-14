@@ -192,11 +192,11 @@ class SSHClient(object):
                     results['done'].append(f)
                 except SCPException as error:
                     results['failed'].append(f)
-                    logging.error(self.__s__(error))
+                    logging.error(self.__s__(error), exc_info=True)
             scp.close()
             self.close()
         except SCPException as error:
-            logging.error(self.__s__(error))
+            logging.error(self.__s__(error), exc_info=True)
         finally:
             return results
 
@@ -211,11 +211,11 @@ class SSHClient(object):
                 results['done'].append(local_path)
             except SCPException as error:
                 results['failed'].append(local_path)
-                logging.error(self.__s__(e))
+                logging.error(self.__s__(e), exc_info=True)
             scp.close()
             self.close()
         except SCPException as error:
-            logging.error(self.__s__(error))
+            logging.error(self.__s__(error), exc_info=True)
         # finally:
             # print(results)
         return results
@@ -233,19 +233,20 @@ class SSHClient(object):
     def connect(self, tries=2):
         if not self.is_valid():
             return False
-        if tries <= 0 : return False
+        if tries <= 0 :
+            logging.error(self.__s__('unable to connect'))
+            return False
 
         self.client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy)
         try:
             self.client.connect(**self.config)
             return True
         except TimeoutError:
-            logging.error(self.__s__('request timeout'))
             if 'icon' in self.status.keys():
                 del self.status['icon']
             return self.connect(tries-1)
         except Exception as e:
-            logging.error(self.__s__('unable to connect because of {}'.format(e)))
+            logging.error(self.__s__('unable to connect because of {}'.format(e)), exc_info=True)
             return False
 
 
@@ -336,7 +337,7 @@ class SSHClient(object):
             logging.debug(self.__s__('closed'))
 
         except FileNotFoundError:
-            logging.error(self.__s__('vncviewer not found'))
+            logging.error(self.__s__('vncviewer not found'), exc_info=True)
         except Exception as e:
             logging.error(self.__s__(e), exc_info=True)
 

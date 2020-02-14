@@ -2,10 +2,11 @@ import sys,traceback,os
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QWidget
+import logging
 
 from listModel import ThumbnailListViewer
 from sshTable import SSHTable
-import logging
+from logWidget import LogWidget
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -39,6 +40,7 @@ class MainFrame(QtWidgets.QMainWindow):
    
     def initUI(self):
         widgets = ThumbnailListViewer()
+
         self.search = QtWidgets.QLineEdit(self) 
         self.search.setPlaceholderText("Enter address/tags to search")
         self.search.textChanged.connect(self.on_search)
@@ -86,10 +88,19 @@ class MainFrame(QtWidgets.QMainWindow):
         self.openSSHTableAction = QtWidgets.QAction('Open Table', self)
         self.openSSHTableAction.triggered.connect(lambda : self.table.setVisible(True))
 
+
+        self.logWidget = LogWidget(['log.txt'], parent=self)
+        self.logWidget.setVisible(False)
+        self.logWidget.setMinimumSize(800,600)
+        self.logWidget.setWindowTitle("Logging")
+        self.viewLogAction = QtWidgets.QAction('View Log', self)
+        self.viewLogAction.triggered.connect(lambda : self.logWidget.setVisible(True))
+
         self.toolbar = self.addToolBar('Main')
         self.toolbar.addAction(self.iconViewAction)
         self.toolbar.addAction(self.detailViewAction)
         self.toolbar.addAction(self.openSSHTableAction)
+        self.toolbar.addAction(self.viewLogAction)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
         self.toolbar.addAction(self.sortByNameAction)
@@ -189,6 +200,8 @@ class MainFrame(QtWidgets.QMainWindow):
 
 
 if __name__ == '__main__':
+    DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s %(message)s"
+    logging.basicConfig(filename='log.txt',level=logging.ERROR, format=DEBUG_FORMAT)
     argv = sys.argv
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())
