@@ -104,13 +104,15 @@ def load_ssh_dir (dir):
         if not re.search(r'.json$', entry.name):
             continue
 
-        server = __load_ssh_file__(entry.path)
-        if server:
-            results.append(server)
+        try:
+            server = load_ssh_file(entry.path)
+            if server: results.append(server)
+        except:
+            pass
     return results
 
 
-def __load_ssh_file__(path):
+def load_ssh_file(path):
     fp = open(path, 'r')
     info = json.load(fp)
     fp.close()

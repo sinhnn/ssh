@@ -5,6 +5,7 @@ from worker import Worker
 from threading import Thread
 
 from common import close_all
+from sshDialogForm import SSHInputDialog
 
 
 class ListModel(QtCore.QAbstractListModel):
@@ -19,11 +20,17 @@ class ListModel(QtCore.QAbstractListModel):
     def count(self):
         return len(self.__data__)
 
-    def rowCount(self, parent):
+    def rowCount(self, parent=QtCore.QModelIndex()):
         return len(self.__data__)
 
     def itemAtRow(self, i):
         return self.__data__[i]
+
+    def appendItem(self, item):
+        self.beginInsertRows(QtCore.QModelIndex(), self.rowCount() - 1, self.rowCount() - 1)
+        self.__data__.append(item)
+        self.endInsertRows()
+        return True
         
     def data(self, index, role = QtCore.Qt.DisplayRole):
         if not index.isValid():
@@ -63,7 +70,7 @@ class ListModel(QtCore.QAbstractListModel):
             logging.error(e)
 
 
-from sshTable import ChooseCommandDialog, load_ssh_dir
+from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 class ThumbnailListViewer(QtWidgets.QListView):
@@ -88,6 +95,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
             'open' : self.open_vncviewer,
+            'new' : self.new_item,
             'edit' : self.open_vncviewer,
             'upload' : self.upload,
             'command' : self.exec_command, # from file or command
@@ -134,6 +142,13 @@ class ThumbnailListViewer(QtWidgets.QListView):
         for item in self.selectedItems():
             worker = Worker(item.exec_command, r)
             self.threadpool.start(worker)
+
+    def new_item(self):
+        dialog = SSHInputDialog(parent=self)
+        r = dialog.getResult()
+        if not r: return
+        item = load_ssh_file(r)
+        self.model().appendItem(item)
 
     def open_vncviewer(self):
         for item in self.selectedItems():

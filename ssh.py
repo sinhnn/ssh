@@ -104,7 +104,7 @@ class SSHClient(object):
 
     def __init__(self, info, fileConfig=None, vncthumb=True, **kwargs):
         self.info = info
-        self.config = self.info['config']
+        self.config = self.info.get('config', {})
         self.vncthumb = vncthumb
         self.status = {'screenshot' : None,  'vncserver': []}
         self.client = paramiko.SSHClient()
@@ -129,7 +129,7 @@ class SSHClient(object):
             self.threads.append(thread)
 
     def __s__(self, s):
-        return '{}@{} {}'.format(self.config['username'], self.config['hostname'], s)
+        return '{}@{} {}'.format(self.config.get('username'), self.config.get('hostname'), s)
 
 
     def keys(self):
@@ -152,7 +152,8 @@ class SSHClient(object):
 
     def is_valid(self):
         for r in SSHClient.__REQUIRED__:
-            if r not in self.config.keys():
+            # if r not in self.config.keys():
+            if r not in self.config.keys() and self.config.get(r, '') == '':
                 logging.error(self.__s__('must has {}'.format(r)))
                 return False
 
@@ -165,16 +166,13 @@ class SSHClient(object):
 
 
     def __del__(self):
-        logging.error(self.__s__('clossing ssh client'))
+        logging.error(self.__s__('closing ssh client'))
         self.close()
         for t in self.tunnels:
-            logging.error(self.__s__('closeing tunnels'))
             t.stop()
         for p in self.processes:
-            logging.error(self.__s__('closeing processes'))
             p.terminate()
         for t in self.threads:
-            logging.error(self.__s__('closeing threads'))
             # t.stop()
             t.join()
 
