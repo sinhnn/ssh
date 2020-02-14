@@ -102,8 +102,9 @@ class SSHClient(object):
     __REQUIRED__ = ['hostname', 'username']
     __ANY__ = [['password', 'key_filename', 'pkey']]
 
-    def __init__(self, config, fileConfig=None, vncthumb=True, **kwargs):
-        self.config = config
+    def __init__(self, info, fileConfig=None, vncthumb=True, **kwargs):
+        self.info = info
+        self.config = self.info['config']
         self.vncthumb = vncthumb
         self.status = {'screenshot' : None,  'vncserver': []}
         self.client = paramiko.SSHClient()
@@ -116,6 +117,9 @@ class SSHClient(object):
         self.threads = []
         self.__daemon__()
 
+    def __str__(self):
+        return '{}\n{}'.format(self.config['hostname'],
+                ','.join(self.info['tags']))
 
     def __daemon__(self):
         for  t in [self.update_vncthumnail]:

@@ -52,6 +52,7 @@ class ChooseCommandDialog(QtWidgets.QDialog):
         layout.setColumnStretch(0,1)
         layout.setRowStretch(0,1)
 
+        self.setMinimumWidth(600)
         self.setLayout(layout)
 
     def getResult(self):
@@ -104,24 +105,20 @@ def load_ssh_dir (dir):
             continue
 
         server = __load_ssh_file__(entry.path)
-        if server: results.append(server)
+        if server:
+            results.append(server)
     return results
 
 
 def __load_ssh_file__(path):
     fp = open(path, 'r')
-    config = json.load(fp)
+    info = json.load(fp)
     fp.close()
 
-    client = ssh.SSHClient(config=config)
-    if client.is_valid():
-        return client
-
+    client = ssh.SSHClient(info=info)
+    if client.is_valid(): return client
     return {}
-
-
-
- 
+    # return None
 
 class SSHTable(QTableView):
     def __init__(self, data=[], dir=__SSH_DIR__, **kwargs):
