@@ -96,12 +96,17 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.actions = {
             'open' : self.open_vncviewer,
             'new' : self.new_item,
-            'edit' : self.open_vncviewer,
+            'edit' : self.open_file,
             'upload' : self.upload,
             'command' : self.exec_command, # from file or command
         }
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
+
+    def open_file(self):
+        for item in self.selectedItems():
+            if item.get('filepath'):
+                os.startfile(str(item.get('filepath')))
 
     def setIconView(self):
         self.setViewMode(QtWidgets.QListView.IconMode)
@@ -148,6 +153,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         r = dialog.getResult()
         if not r: return
         item = load_ssh_file(r)
+        item.info['filepath'] = str(r)
         self.model().appendItem(item)
 
     def open_vncviewer(self):

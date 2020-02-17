@@ -7,6 +7,7 @@ import logging
 from listModel import ThumbnailListViewer
 from sshTable import SSHTable
 from logWidget import LogWidget
+import common
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -201,6 +202,9 @@ class MainFrame(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s %(message)s"
+    # logging.basicConfig(level=logging.ERROR, format=DEBUG_FORMAT)
+    if os.path.isfile('log.txt'):
+        open('log.txt', 'w').write('')
     logging.basicConfig(filename='log.txt',level=logging.ERROR, format=DEBUG_FORMAT)
     argv = sys.argv
     app = QApplication(argv)

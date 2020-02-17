@@ -71,7 +71,7 @@ class SSHInputDialog(QtWidgets.QDialog):
                 'hostname' : self.hostnameWidget.text(),
                 'username' : self.usernameWidget.text(),
                 'password' : self.passwordWidget.text(),
-                'key_filename' : self.passwordWidget.text()
+                'key_filename' : self.private_key_file.text()
             },
             "tags" : [self.tags.text()]
         }
@@ -82,9 +82,10 @@ class SSHInputDialog(QtWidgets.QDialog):
 
         dialog = QtWidgets.QFileDialog()
         files, _ = dialog.getSaveFileName(None, "Create New File", self.hostnameWidget.text() + '.json',"*.json");
-        if not files: return None
+        if not files:
+            return None
         with open(files, 'w') as fp:
-            json.dump( _, fp, indent=4)
+            json.dump(info, fp, indent=4)
         return files
 
     def __browser__(self):

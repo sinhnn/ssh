@@ -1,5 +1,6 @@
 import os,sys, subprocess, platform, threading, time
 import json
+import unicodedata
 import logging
 
 import cv2
@@ -11,6 +12,7 @@ from scp import SCPClient, SCPException
 
 from port import PortScanner
 from common import close_all
+import utils
 
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __CACHE__ = os.path.join(__PATH__, 'cache')
@@ -103,7 +105,7 @@ class SSHClient(object):
     __ANY__ = [['password', 'key_filename', 'pkey']]
 
     def __init__(self, info, fileConfig=None, vncthumb=True, **kwargs):
-        self.info = info
+        self.info = utils.rm_empty(info)
         self.config = self.info.get('config', {})
         self.vncthumb = vncthumb
         self.status = {'screenshot' : None,  'vncserver': []}
@@ -129,7 +131,10 @@ class SSHClient(object):
             self.threads.append(thread)
 
     def __s__(self, s):
-        return '{}@{} {}'.format(self.config.get('username'), self.config.get('hostname'), s)
+        try:
+            return '{}@{} {}'.format(self.config.get('username'), self.config.get('hostname'), s)
+        except Exception as e:
+            logging.error(e, exc_info=True)
 
 
     def keys(self):
@@ -141,6 +146,8 @@ class SSHClient(object):
             return self.config[k]
         elif k in self.status.keys():
             return self.status[k]
+        elif k in self.info.keys():
+            return self.info[k]
         return default
 
     def update(self, k, v):
