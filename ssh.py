@@ -116,7 +116,7 @@ class SSHClient(object):
         self.processes = [] # store all child process
 
         self.threads = []
-        # self.__daemon__()
+        self.__daemon__()
 
     def __str__(self):
         return '{}\n{}'.format(self.config['hostname'],

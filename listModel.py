@@ -75,6 +75,7 @@ __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 class ThumbnailListViewer(QtWidgets.QListView):
     """Docstring for ThumbnailListViewer. """
+    __DEFAULT_ICON_SIZE__ = QtCore.QSize(320, 260)
     def __init__(self, dir=__SSH_DIR__, parent=None, **kwargs):
         """TODO: to be defined. """
         QtWidgets.QListView.__init__(self, parent, **kwargs)
@@ -95,6 +96,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
             'open' : self.open_vncviewer,
+            'open_terminal' : self.open_terminal,
             'new' : self.new_item,
             'edit' : self.open_file,
             'upload' : self.upload,
@@ -108,16 +110,24 @@ class ThumbnailListViewer(QtWidgets.QListView):
             if item.get('filepath'):
                 os.startfile(str(item.get('filepath')))
 
+    def scaleIcon(self, v):
+        nw = int(ThumbnailListViewer.__DEFAULT_ICON_SIZE__.width() * v)
+        nh = int(ThumbnailListViewer.__DEFAULT_ICON_SIZE__.height() * v)
+        ns = QtCore.QSize(nw, nh)
+        self.setGridSize(ns)
+        self.setIconSize(ns)
+        self.setUniformItemSizes(True)
+
     def setIconView(self):
         self.setViewMode(QtWidgets.QListView.IconMode)
         self.setFlow(QtWidgets.QListView.LeftToRight)
         self.setLayoutMode(QtWidgets.QListView.SinglePass)
         self.setResizeMode(QtWidgets.QListView.Adjust)
 
-        self.setGridSize(QtCore.QSize(320, 260))
-        self.setIconSize(QtCore.QSize(320, 260))
+        self.setGridSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
+        self.setIconSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
         self.setSpacing(2)
-        self.setUniformItemSizes(False)
+        self.setUniformItemSizes(True)
 
     def setListView(self):
         self.setGridSize(QtCore.QSize(100, 60))
@@ -159,6 +169,11 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def open_vncviewer(self):
         for item in self.selectedItems():
             worker = Worker(item.open_vncviewer)
+            self.threadpool.start(worker)
+
+    def open_terminal(self):
+        for item in self.selectedItems():
+            worker = Worker(item.invoke_shell)
             self.threadpool.start(worker)
 
     def upload(self):

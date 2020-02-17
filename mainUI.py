@@ -46,6 +46,15 @@ class MainFrame(QtWidgets.QMainWindow):
         self.search.setPlaceholderText("Enter address/tags to search")
         self.search.textChanged.connect(self.on_search)
 
+        self.scale =  QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.scale.setMinimum(30)
+        self.scale.setMaximum(300)
+        self.scale.setTickInterval(30)
+        self.scale.setTickPosition(QtWidgets.QSlider.TicksBothSides)
+        self.scale.setFixedWidth(150)
+        self.scale.valueChanged.connect(self.on_scale)
+
+
         self.sort_order = True
         self.sort_order_button = QtWidgets.QToolButton() 
         self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
@@ -102,6 +111,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.detailViewAction)
         self.toolbar.addAction(self.openSSHTableAction)
         self.toolbar.addAction(self.viewLogAction)
+        self.toolbar.addWidget(self.scale)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
         self.toolbar.addAction(self.sortByNameAction)
@@ -117,6 +127,9 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addAction(self.exitAction)
 
         self.setWindowTitle("....")
+
+    def on_scale(self, value):
+        self._widgets.scaleIcon(float(value/100.0))
 
     def re_sort (self):
         if self.sort_order:
@@ -205,7 +218,8 @@ if __name__ == '__main__':
     # logging.basicConfig(level=logging.ERROR, format=DEBUG_FORMAT)
     if os.path.isfile('log.txt'):
         open('log.txt', 'w').write('')
-    logging.basicConfig(filename='log.txt',level=logging.ERROR, format=DEBUG_FORMAT)
+    # logging.basicConfig(level=logging.DEBUG, format=DEBUG_FORMAT)
+    logging.basicConfig(filename='log.txt',level=logging.DEBUG, format=DEBUG_FORMAT)
     argv = sys.argv
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())
