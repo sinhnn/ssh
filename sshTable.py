@@ -106,20 +106,27 @@ def load_ssh_dir (dir):
 
         try:
             server = load_ssh_file(entry.path)
-            if server: results.append(server)
+            if server:
+                server.info['filepath']  = entry.path
+                results.append(server)
         except:
             pass
     return results
 
 
 def load_ssh_file(path):
-    fp = open(path, 'r')
-    info = json.load(fp)
-    fp.close()
+    try:
+        fp = open(path, 'r')
+        info = json.load(fp)
+        fp.close()
 
-    client = ssh.SSHClient(info=info)
-    if client.is_valid(): return client
-    return {}
+        client = ssh.SSHClient(info=info)
+        if client.is_valid(): return client
+        return {}
+    except Exception as e:
+        logging.error('unable to load ssh file {}\n{}'.format(path),
+                exc_info=True)
+        return {}
     # return None
 
 class SSHTable(QTableView):
