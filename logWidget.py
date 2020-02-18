@@ -31,6 +31,68 @@ import logging
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from widgets.highlight import KeywordHighlighter
 
+class PlainTextEditLogger(logging.Handler):
+    def __init__(self, **kwargs):
+        logging.Handler.__init__(self, **kwargs)
+        self.__records__ = []
+
+        self.widget = QtWidgets.QWidget()
+        self.layout = QVBoxLayout()
+        self.initOpts()
+        self.initLogDisplay()
+        self.layout.setStretch(1,1)
+        self.widget.setLayout(self.layout) 
+
+    def initOpts(self):
+        layout = QHBoxLayout()
+        self.errors = QCheckBox("Error", self.widget) 
+        self.errors.stateChanged.connect(self.refreshLog)
+        layout.addWidget(self.errors)
+        layout.addSpacerItem(QSpacerItem(10,0, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding))
+        self.layout.addLayout(layout)
+        return layout
+
+    def initLogDisplay(self):
+        self.font = QFont("Consolas", 10)
+        self.displayLog = QTextEdit(self.widget)
+        self.displayLog.setReadOnly(True)
+        self.displayLog.setFont(self.font)
+        self.refreshLog()
+        self.highlighter = KeywordHighlighter(self.displayLog.document())
+        # self.displayLog.verticalScrollBar().setValue(self.displayLog.verticalScrollBar().maximum())
+        # self.displayLog.moveCursor(QTextCursor.End)
+        self.displayLog.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.layout.addWidget(self.displayLog)
+
+    def _filter(self, line, date=None):
+        o = True
+        if self.errors.isChecked():
+            o = o and bool(re.search(r"errors?|critical", line, flags=re.I))
+        if self.today.isChecked() and date:
+            o = o and bool(re.match(r"{}".format(date), line))
+        return o
+
+    def refreshLog(self):
+        pass
+        # today = datetime.date.today().strftime("%Y-%m-%d")
+        # regex = r'{}'.format(today)
+        # self.__refreshLog__(self.comboBox.currentText(), numbLine, self.fullLog.isChecked(), lambda l: self._filter(l, today))
+        # text = self._filter()
+        # self.displayLog.setFont(self.font)
+        # self.displayLog.setText('\n'.join(t))
+        # self.displayLog.verticalScrollBar().setValue(self.displayLog.verticalScrollBar().maximum())
+        # self.displayLog.moveCursor(QTextCursor.End)
+
+    def emit(self, record):
+        self.__records__.append(record) #TODO: Check record formats
+        msg = self.format(record)
+        self.displayLog.append(msg)
+        # self.displayLog.verticalScrollBar().setValue(self.displayLog.verticalScrollBar().maximum())
+        # self.displayLog.moveCursor(QTextCursor.End)
+
+    def write(self, m):
+        pass
+
 class LogWidget(QWidget):
     def __init__(self, files,**kwargs):
         super().__init__()
@@ -115,7 +177,7 @@ class LogWidget(QWidget):
         self.refreshLog()
         self.highlighter = KeywordHighlighter(self.displayLog.document())
         self.displayLog.verticalScrollBar().setValue(self.displayLog.verticalScrollBar().maximum())
-        self.displayLog.moveCursor(QTextCursor.End)
+        # self.displayLog.moveCursor(QTextCursor.End)
         self.displayLog.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                 QtWidgets.QSizePolicy.Expanding)
         # self.displayLog.setHorizontal(QtWidgets.QSizePolicy.Expanding)
@@ -160,7 +222,7 @@ class LogWidget(QWidget):
         self.displayLog.setFont(self.font)
         self.displayLog.setText('\n'.join(t))
         self.displayLog.verticalScrollBar().setValue(self.displayLog.verticalScrollBar().maximum())
-        self.displayLog.moveCursor(QTextCursor.End)
+        # self.displayLog.moveCursor(QTextCursor.End)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

@@ -1,6 +1,7 @@
 import os,sys, subprocess, platform, threading, time
 import json
 import logging
+import socket
 
 import cv2
 
@@ -257,6 +258,9 @@ class SSHClient(object):
             if 'icon' in self.status.keys():
                 del self.status['icon']
             return self.connect(tries-1)
+        except socket.timeout:
+            self.__delete_icon__()
+            return self.connect(tries-1)
         except Exception as e:
             logging.error(self.__s__('unable to connect because of {}'.format(e)), exc_info=True)
             return False
@@ -306,22 +310,19 @@ class SSHClient(object):
             logging.info('{}@{}:{}'.format(self.config['username'], self.config['hostname'], command))
             stdin, stdout, stderr = self.client.exec_command(command)
 
-            r_out  = ''
-            # while not stdout.channel.exit_status_ready():
-            #     if stdout.channel.recv_ready():
-            #         line = stdout.readlines()
-            #         logging.info(self.__s__(''.join(line)))
-            #         self.status['progress'] = line
-            #         r_out += line
-            #         # if r_out.endswith('\n'):
-            #             # yield r_out
-            #             # r_out = ''
-            #         # if '[sudo] password' in '\n'.join(line):
-            #         if 'password' in '\n'.join(line):
-            #             stdin.write(self.config['password'] + '\n')
-            #             stdin.flush()
-            #         # time.sleep(0.1)
-            # logging.info('!!!DONE')
+            # r_out  = ''
+            while not stdout.channel.exit_status_ready():
+                if close_all: break
+                logging.debug(self.__s__("reading client command ouput"))
+                if stdout.channel.recv_ready():
+                    line = stdout.readlines()
+                    logging.info(self.__s__(''.join(line)))
+                    self.status['progress'] = line
+                    if 'password' in '\n'.join(line):
+                        stdin.write(self.config['password'] + '\n')
+                        stdin.flush()
+                    # time.sleep(0.1)
+            logging.info('!!!DONE')
             r_out, r_err = stdout.readlines(), stderr.readlines()
             # r_err = stderr.readlines()
             self.client.close()

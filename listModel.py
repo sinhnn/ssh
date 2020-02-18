@@ -8,6 +8,7 @@ from common import close_all
 from sshDialogForm import SSHInputDialog
 
 
+
 class ListModel(QtCore.QAbstractListModel):
     """Docstring for ListModel. """
     def __init__(self, data=[], parent=None, **kwargs):
@@ -43,6 +44,10 @@ class ListModel(QtCore.QAbstractListModel):
             for row in range(self.rowCount()):
                 worker = Worker(self.force_update_item, row)
                 self.threadpool.start(worker)
+                if close_all: break
+            if close_all:
+                logging.debug("Recevice close all signal")
+                break
             time.sleep(self.delay)
 
     def index(self, row, column=0, parent=QtCore.QModelIndex()):
@@ -142,8 +147,9 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.doubleClicked.connect(self.open)
         self.setDragEnabled(False)
 
-        self.threadpool = QtCore.QThreadPool()
         self.initUI()
+        self.threadpool = QtCore.QThreadPool()
+        self.threadpool.start(Worker(self.force_update))
 
     def initUI(self):
         model = ListModel(load_ssh_dir(self.dir), self)
@@ -162,6 +168,13 @@ class ThumbnailListViewer(QtWidgets.QListView):
         }
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
+
+    def force_update(self):
+        while True:
+            if close_all: break
+            # self.repaint()
+            self.update()
+            time.sleep(1)
 
     def open_file(self):
         for item in self.selectedItems():

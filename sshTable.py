@@ -107,7 +107,7 @@ def load_ssh_dir (dir):
         try:
             server = load_ssh_file(entry.path)
             if server:
-                server.info['filepath']  = entry.path
+                server.info['filepath'] = entry.path
                 results.append(server)
         except:
             pass

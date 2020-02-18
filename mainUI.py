@@ -6,8 +6,9 @@ import logging
 
 from listModel import ThumbnailListViewer
 from sshTable import SSHTable
-from logWidget import LogWidget
+from logWidget import LogWidget, PlainTextEditLogger
 import common
+from common import close_all
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -40,7 +41,18 @@ class MainFrame(QtWidgets.QMainWindow):
         self.setMinimumSize(1800,1000)
    
     def initUI(self):
+        mWidgets = QtWidgets.QWidget()
+        mlayout = QtWidgets.QVBoxLayout()
+        # DEBUG_FORMAT = logging.Formatter("%(asctime)s %(levelname)-8s  %(message)s")
+        # mlog = PlainTextEditLogger()
+        # mlog.setFormatter(DEBUG_FORMAT)
+        # mlog.setLevel(logging.INFO)
+        # mlog.widget.setFixedHeight(200)
+        # logging.getLogger().addHandler(mlog)
         widgets = ThumbnailListViewer()
+        mlayout.addWidget(widgets)
+        # mlayout.addWidget(mlog.widget)
+        mWidgets.setLayout(mlayout)
 
         self.search = QtWidgets.QLineEdit(self) 
         self.search.setPlaceholderText("Enter address/tags to search")
@@ -69,13 +81,14 @@ class MainFrame(QtWidgets.QMainWindow):
         self.table = SSHTable(widgets.model().getData())
         self.table.setMinimumSize(800,600)
         self.table.setWindowTitle('SSH Table')
-        self.setCentralWidget(widgets);
+        self.setCentralWidget(mWidgets);
         self._widgets = widgets
         self.setIconView()
 
         self.exitAction = QtWidgets.QAction('Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
-        self.exitAction.triggered.connect(QApplication.quit)
+        # self.exitAction.triggered.connect(QApplication.quit)
+        self.exitAction.triggered.connect(self.on_exit)
 
         self.loadAction = QtWidgets.QAction('Load Directory', self)
         self.loadAction.triggered.connect(self.loadDir)
@@ -100,18 +113,18 @@ class MainFrame(QtWidgets.QMainWindow):
         self.openSSHTableAction.triggered.connect(lambda : self.table.setVisible(True))
 
 
-        self.logWidget = LogWidget(['log.txt'], parent=self)
-        self.logWidget.setVisible(False)
-        self.logWidget.setMinimumSize(800,600)
-        self.logWidget.setWindowTitle("Logging")
-        self.viewLogAction = QtWidgets.QAction('View Log', self)
-        self.viewLogAction.triggered.connect(lambda : self.logWidget.setVisible(True))
+        # self.logWidget = LogWidget(['log.txt'], parent=self)
+        # self.logWidget.setVisible(False)
+        # self.logWidget.setMinimumSize(800,600)
+        # self.logWidget.setWindowTitle("Logging")
+        # self.viewLogAction = QtWidgets.QAction('View Log', self)
+        # self.viewLogAction.triggered.connect(lambda : self.logWidget.setVisible(True))
 
         self.toolbar = self.addToolBar('Main')
         self.toolbar.addAction(self.iconViewAction)
         self.toolbar.addAction(self.detailViewAction)
         self.toolbar.addAction(self.openSSHTableAction)
-        self.toolbar.addAction(self.viewLogAction)
+        # self.toolbar.addAction(self.viewLogAction)
         self.toolbar.addWidget(self.scale)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
@@ -128,6 +141,10 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addAction(self.exitAction)
 
         self.setWindowTitle("....")
+
+    def on_exit(self):
+        close_all = True
+        QApplication.quit()
 
     def on_scale(self, value):
         self._widgets.scaleIcon(float(value/100.0))
@@ -216,11 +233,13 @@ class MainFrame(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
-    # logging.basicConfig(level=logging.ERROR, format=DEBUG_FORMAT)
-    if os.path.isfile('log.txt'):
-        open('log.txt', 'w').write('')
-    # logging.basicConfig(level=logging.DEBUG, format=DEBUG_FORMAT)
-    logging.basicConfig(filename='log.txt',level=logging.DEBUG, format=DEBUG_FORMAT)
+    if os.path.isfile('log.txt'): open('log.txt', 'w').write('')
+    # logging.basicConfig(level=logging.INFO, format=DEBUG_FORMAT)
+    fileHandler = logging.FileHandler('log.txt', mode='a', encoding=None, delay=False)
+    fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
+    fileHandler.setLevel(logging.DEBUG)
+    logging.getLogger().addHandler(fileHandler)
+    logging.getLogger().setLevel(logging.DEBUG)
     argv = sys.argv
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())
@@ -229,4 +248,3 @@ if __name__ == '__main__':
     w.move(0,0)
     w.show()
     app.exec_()
-

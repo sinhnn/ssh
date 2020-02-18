@@ -1,4 +1,4 @@
 {
 	"name" : "Screenshot",
-	"value"  : "DISPLAY=:1 scrot --thumb 20 thumbnail_$DISPLAY.jpg"
+	"value"  : "DISPLAY=:1 scrot --thumb 20 screenshot_$DISPLAY.jpg"
 }

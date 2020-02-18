@@ -1,0 +1,4 @@
+{
+	"name" : "Install",
+	"value"  : "sudo apt install -y xorg xserver-xorg openbox obmenu tigervnc* wget curl firefox cifs-utils caja mate-terminal caja-open-terminal ffmpeg scrot xsel xdotool"
+}
