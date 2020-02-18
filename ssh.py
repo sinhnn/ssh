@@ -109,6 +109,7 @@ class SSHClient(object):
         self.vncthumb = vncthumb
         self.status = {'screenshot' : None,  'vncserver': []}
         self.client = paramiko.SSHClient()
+        self.delay = 1
 
         self.tunnels = []
 
@@ -298,24 +299,23 @@ class SSHClient(object):
             stdin, stdout, stderr = self.client.exec_command(command)
 
             r_out  = ''
-            while not stdout.channel.exit_status_ready():
-                if stdout.channel.recv_ready():
-                    line = stdout.readlines()
-                    print(self.__s__(''.join(line)))
-                    self.status['progress'] = line
-                    r_out += line
-                    # if r_out.endswith('\n'):
-                        # yield r_out
-                        # r_out = ''
-                    # if '[sudo] password' in '\n'.join(line):
-                    if 'password' in '\n'.join(line):
-                        stdin.write(self.config['password'] + '\n')
-                        stdin.flush()
-                    # time.sleep(0.1)
-            print('!!!DONE')
-
-            # r_out, r_err = stdout.readlines(), stderr.readlines()
-            r_err = stderr.readlines()
+            # while not stdout.channel.exit_status_ready():
+            #     if stdout.channel.recv_ready():
+            #         line = stdout.readlines()
+            #         logging.info(self.__s__(''.join(line)))
+            #         self.status['progress'] = line
+            #         r_out += line
+            #         # if r_out.endswith('\n'):
+            #             # yield r_out
+            #             # r_out = ''
+            #         # if '[sudo] password' in '\n'.join(line):
+            #         if 'password' in '\n'.join(line):
+            #             stdin.write(self.config['password'] + '\n')
+            #             stdin.flush()
+            #         # time.sleep(0.1)
+            # logging.info('!!!DONE')
+            r_out, r_err = stdout.readlines(), stderr.readlines()
+            # r_err = stderr.readlines()
             self.client.close()
         except Exception as e:
             logging.error(self.__s__(e), exc_info=True)
@@ -371,7 +371,7 @@ class SSHClient(object):
             if self.vncthumb:
                 # self.vncsnapshot()
                 self.vncscreenshot()
-            time.sleep(10)
+            time.sleep(self.delay)
 
     def vncsnapshot(self):
         # vncsnapshot -tunnel only available in Linux

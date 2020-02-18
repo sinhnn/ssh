@@ -1,4 +1,4 @@
-import os, sys, threading, subprocess
+import os, sys, threading, subprocess, time, logging
 from PyQt5 import QtWidgets, QtCore, QtGui
 
 from worker import Worker
@@ -12,7 +12,30 @@ class ListModel(QtCore.QAbstractListModel):
     """Docstring for ListModel. """
     def __init__(self, data=[], parent=None, **kwargs):
         QtCore.QAbstractListModel.__init__(self, parent, **kwargs)
+        self.parent = parent
         self.__data__ = data
+
+
+    # def force_update(self, delay=1):
+    #     # tableview->rect().bottomRight()
+    #     bottomRight = self.parent.indexAt(slf.parent.rect().bottomRight())
+    #     while (True):
+    #         self.dataChanged.emit(QtCore.QModelIndex(), bottomRight, [])
+    #         time.sleep(delay)
+
+    def force_update(self):
+        while True:
+            try:
+                self.layoutAboutToBeChanged.emit()
+                # self.__data__.sort(key=lambda item : item.get(key, 'Z'),  reverse=not order)
+                self.__data__.sort(key=lambda item : item.get('hostname'),  reverse=not order)
+                # self.dataChanged.emit(QtCore.QModelIndex(), QtCore.QModelIndex((1, 0)), [])
+                # self.setFocus()
+                self.layoutChanged.emit()
+            except Exception as e:
+                logging.error(e, exc_info=True)
+            time.sleep(1)
+
 
     def getData(self):
         return self.__data__
@@ -61,6 +84,7 @@ class ListModel(QtCore.QAbstractListModel):
         except Exception as e:
             logging.error(e, exc_info=True)
 
+
     def sort_by(self, key, order):
         try:
             self.layoutAboutToBeChanged.emit()
@@ -85,13 +109,16 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setIconView()
 
         self.doubleClicked.connect(self.open)
+        self.setDragEnabled(False)
 
         self.threadpool = QtCore.QThreadPool()
         self.initUI()
 
     def initUI(self):
-        model = ListModel(load_ssh_dir(self.dir))
+        model = ListModel(load_ssh_dir(self.dir), self)
         self.setModel(model)
+        # worker = Worker(model.force_update)
+        # self.threadpool.start(worker)
 
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
@@ -116,7 +143,6 @@ class ThumbnailListViewer(QtWidgets.QListView):
         ns = QtCore.QSize(nw, nh)
         self.setGridSize(ns)
         self.setIconSize(ns)
-        self.setUniformItemSizes(True)
 
     def setIconView(self):
         self.setViewMode(QtWidgets.QListView.IconMode)
@@ -126,8 +152,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
         self.setGridSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
         self.setIconSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
-        self.setSpacing(2)
-        self.setUniformItemSizes(True)
+        self.setSpacing(0)
+        self.setUniformItemSizes(False)
 
     def setListView(self):
         self.setGridSize(QtCore.QSize(100, 60))
