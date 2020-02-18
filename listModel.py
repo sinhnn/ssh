@@ -15,26 +15,46 @@ class ListModel(QtCore.QAbstractListModel):
         self.parent = parent
         self.__data__ = data
 
+        self.delay = 2
+        # self._update_timer  = QtCore.QTimer()
+        self.threadpool = QtCore.QThreadPool()
+        # uworker = Worker(self.force_update)
+        self.threadpool.start(Worker(self.force_update))
+        self.__updating_item__ = []
 
-    # def force_update(self, delay=1):
-    #     # tableview->rect().bottomRight()
-    #     bottomRight = self.parent.indexAt(slf.parent.rect().bottomRight())
-    #     while (True):
-    #         self.dataChanged.emit(QtCore.QModelIndex(), bottomRight, [])
-    #         time.sleep(delay)
+    def force_update_item(self, row):
+        try:
+            topLeft = self.createIndex(row, 0)
+            item = self.__data__[row]
+            if item not in self.__updating_item__:
+                logging.debug('updating thumbnail of {}'.format(str(item).strip()))
+                self.__updating_item__.append(item)
+                item.update_vncthumnail()
+                self.dataChanged.emit(topLeft, topLeft, [])
+                self.__updating_item__.remove(item)
+            else:
+                logging.debug('updating thumbnail of {} has already in queue'.format(str(item).strip()))
+        except Exception as e:
+            logging.error(e, exc_info=True)
+
 
     def force_update(self):
         while True:
-            try:
-                self.layoutAboutToBeChanged.emit()
-                # self.__data__.sort(key=lambda item : item.get(key, 'Z'),  reverse=not order)
-                self.__data__.sort(key=lambda item : item.get('hostname'),  reverse=not order)
-                # self.dataChanged.emit(QtCore.QModelIndex(), QtCore.QModelIndex((1, 0)), [])
-                # self.setFocus()
-                self.layoutChanged.emit()
-            except Exception as e:
-                logging.error(e, exc_info=True)
-            time.sleep(1)
+            for row in range(self.rowCount()):
+                worker = Worker(self.force_update_item, row)
+                self.threadpool.start(worker)
+            time.sleep(self.delay)
+
+    def index(self, row, column=0, parent=QtCore.QModelIndex()):
+        if parent.isValid() and parent.column() != 0:
+            return QtCore.QModelIndex()
+
+        # parentItem = self.getItem(parent)
+        # childItem = parentItem.child(row)
+        # if childItem:
+        return self.createIndex(row, column, parent)
+        # else:
+            # return QtCore.QModelIndex()
 
 
     def getData(self):
@@ -92,6 +112,17 @@ class ListModel(QtCore.QAbstractListModel):
             self.layoutChanged.emit()
         except Exception as e:
             logging.error(e, exc_info=True)
+
+    def find(self, key, value):
+        try:
+            pass
+            # self.layoutAboutToBeChanged.emit()
+            # self.__data__.sort(key=lambda item : item.get(key, 'Z'),  reverse=not order)
+            # self.layoutChanged.emit()
+        except Exception as e:
+            logging.error(e, exc_info=True)
+
+
 
 
 from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file

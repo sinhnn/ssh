@@ -6,6 +6,8 @@ import cv2
 
 import paramiko
 import sshtunnel
+sshtunnel.SSH_TIMEOUT = 5.0
+
 from scp import SCPClient, SCPException
 
 
@@ -108,6 +110,7 @@ class SSHClient(object):
         self.config = self.info.get('config', {})
         self.vncthumb = vncthumb
         self.status = {'screenshot' : None,  'vncserver': []}
+        # self.client = paramiko.SSHClient(timeout=5.0, auth_timeout=5.0)
         self.client = paramiko.SSHClient()
         self.delay = 1
 
@@ -117,7 +120,8 @@ class SSHClient(object):
         self.processes = [] # store all child process
 
         self.threads = []
-        self.__daemon__()
+        # self.update_vncthumnail()
+        # self.__daemon__()
 
     def __str__(self):
         return '{}\n{}'.format(self.config['hostname'],
@@ -168,6 +172,10 @@ class SSHClient(object):
                 return False
         return True
 
+    def __eq__(self, other):
+        if self.get('hostname') == other.get('hostname') \
+            and self.get('username') == other.get('username'):
+            return True
 
     def __del__(self):
         logging.error(self.__s__('closing ssh client'))
@@ -213,12 +221,12 @@ class SSHClient(object):
             try:
                 scp.get(remote_path, local_path, recursive, preserve_times)
                 results['done'].append(local_path)
-            except SCPException as error:
+            except Exception as error:
                 results['failed'].append(local_path)
                 logging.error(self.__s__(error), exc_info=True)
             scp.close()
             self.close()
-        except SCPException as error:
+        except Exception as error:
             logging.error(self.__s__(error), exc_info=True)
         # finally:
             # print(results)
@@ -243,7 +251,7 @@ class SSHClient(object):
 
         self.client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy)
         try:
-            self.client.connect(**self.config)
+            self.client.connect(**self.config, timeout=5.0)
             return True
         except TimeoutError:
             if 'icon' in self.status.keys():
@@ -364,14 +372,13 @@ class SSHClient(object):
             logging.error(self.__s__(e), exc_info=True)
 
     def update_vncthumnail(self):
-        while (True):
-            if close_all:
-                logging.error(self.__s__('close update_vncthumnail'))
-                break
-            if self.vncthumb:
-                # self.vncsnapshot()
-                self.vncscreenshot()
-            time.sleep(self.delay)
+        # while (True):
+        if close_all:
+            logging.error(self.__s__('close update_vncthumnail'))
+        if self.vncthumb:
+            # self.vncsnapshot()
+            self.vncscreenshot()
+            # time.sleep(self.delay)
 
     def vncsnapshot(self):
         # vncsnapshot -tunnel only available in Linux

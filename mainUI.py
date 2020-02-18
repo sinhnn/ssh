@@ -215,7 +215,7 @@ class MainFrame(QtWidgets.QMainWindow):
 
 
 if __name__ == '__main__':
-    DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s %(message)s"
+    DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
     # logging.basicConfig(level=logging.ERROR, format=DEBUG_FORMAT)
     if os.path.isfile('log.txt'):
         open('log.txt', 'w').write('')
