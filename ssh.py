@@ -308,24 +308,35 @@ class SSHClient(object):
             return (False, [], [])
         try:
             logging.info('{}@{}:{}'.format(self.config['username'], self.config['hostname'], command))
-            stdin, stdout, stderr = self.client.exec_command(command)
+            try:
+                stdin, stdout, stderr = self.client.exec_command(command)
+            except Exception as e:
+                logging.error(e)
+                return (False, [], [])
 
-            # r_out  = ''
             while not stdout.channel.exit_status_ready():
-                if close_all: break
-                logging.debug(self.__s__("reading client command ouput"))
-                if stdout.channel.recv_ready():
-                    line = stdout.readlines()
-                    logging.info(self.__s__(''.join(line)))
-                    self.status['progress'] = line
-                    if 'password' in '\n'.join(line):
-                        stdin.write(self.config['password'] + '\n')
-                        stdin.flush()
-                    # time.sleep(0.1)
+                try:
+                    if close_all: break
+                    logging.debug(self.__s__("reading client command ouput"))
+                    if stdout.channel.recv_ready():
+                        line = stdout.readlines()
+                        logging.info(self.__s__(''.join(line)))
+                        self.status['progress'] = line
+                        if 'password' in '\n'.join(line):
+                            stdin.write(self.config['password'] + '\n')
+                            stdin.flush()
+                        # time.sleep(0.1)
+                except Exception as e:
+                    logging.error(self.__s__(e))# , exc_info=True)
+                    break
+                    # return (None, None, None)
             logging.info('!!!DONE')
             r_out, r_err = stdout.readlines(), stderr.readlines()
             # r_err = stderr.readlines()
             self.client.close()
+        except RuntimeError as e:
+            logging.error(self.__s__(e))# , exc_info=True)
+            return (None, None, None)
         except Exception as e:
             logging.error(self.__s__(e), exc_info=True)
             return (None, None, None)

@@ -28,7 +28,7 @@ def timedeltaToString(deltaTime):
 
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
-    signalActive = pyqtSignal()
+    # signalActive = pyqtSignal()
     
     def __init__(self, aPath=None):
         self.__initalMode = 0
@@ -40,6 +40,11 @@ class MainFrame(QtWidgets.QMainWindow):
         self.centerWindow()
         self.setMinimumSize(1800,1000)
    
+        # self._update_timer = QtCore.QTimer()
+        # self._update_timer.start(1000)
+        # self._update_timer.timeout.connect(self.repaint)
+
+
     def initUI(self):
         mWidgets = QtWidgets.QWidget()
         mlayout = QtWidgets.QVBoxLayout()
@@ -49,7 +54,7 @@ class MainFrame(QtWidgets.QMainWindow):
         # mlog.setLevel(logging.INFO)
         # mlog.widget.setFixedHeight(200)
         # logging.getLogger().addHandler(mlog)
-        widgets = ThumbnailListViewer()
+        widgets = ThumbnailListViewer(parent=self)
         mlayout.addWidget(widgets)
         # mlayout.addWidget(mlog.widget)
         mWidgets.setLayout(mlayout)

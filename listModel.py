@@ -18,20 +18,34 @@ class ListModel(QtCore.QAbstractListModel):
 
         self.delay = 2
         # self._update_timer  = QtCore.QTimer()
-        self.threadpool = QtCore.QThreadPool()
+        # self.threadpool = QtCore.QThreadPool()
         # uworker = Worker(self.force_update)
-        self.threadpool.start(Worker(self.force_update))
+        # self.threadpool.start(Worker(self.force_update))
+
+        self.threads = []
+        self.__daemon__()
         self.__updating_item__ = []
+
+    def __daemon__(self):
+        for  t in [self.force_update]:
+            thread = threading.Thread(target=t)
+            thread.daemon = True
+            thread.start()
+            self.threads.append(thread)
 
     def force_update_item(self, row):
         try:
             topLeft = self.createIndex(row, 0)
             item = self.__data__[row]
             if item not in self.__updating_item__:
-                logging.debug('updating thumbnail of {}'.format(str(item).strip()))
+                print('updating thumbnail of {}'.format(str(item).strip()))
+                logging.info('updating thumbnail of {}'.format(str(item).strip()))
                 self.__updating_item__.append(item)
                 item.update_vncthumnail()
-                self.dataChanged.emit(topLeft, topLeft, [])
+                self.dataChanged.emit(topLeft, topLeft, [QtCore.Qt.DecorationRole | QtCore.Qt.DisplayRole ])
+                self.dataChanged.emit(self.createIndex(0,0), self.createIndex(self.rowCount(), 0), [])
+                self.layoutChanged.emit()
+                print('dataChanged on {}'.format(item))
                 self.__updating_item__.remove(item)
             else:
                 logging.debug('updating thumbnail of {} has already in queue'.format(str(item).strip()))
@@ -42,10 +56,15 @@ class ListModel(QtCore.QAbstractListModel):
     def force_update(self):
         while True:
             for row in range(self.rowCount()):
-                worker = Worker(self.force_update_item, row)
-                self.threadpool.start(worker)
-                if close_all: break
+                thread = threading.Thread(target=self.force_update_item, args=(row,))
+                thread.daemon = True
+                thread.start()
+                self.threads.append(thread)
+                # worker = Worker(self.force_update_item, row)
+                # self.threadpool.start(worker)
             if close_all:
+                for t in self.threads:
+                    t.join()
                 logging.debug("Recevice close all signal")
                 break
             time.sleep(self.delay)
@@ -80,26 +99,26 @@ class ListModel(QtCore.QAbstractListModel):
         self.endInsertRows()
         return True
         
-    def data(self, index, role = QtCore.Qt.DisplayRole):
+    def data(self, index, role = QtCore.Qt.DecorationRole):
+        print("getting data from model")
         if not index.isValid():
+            print("invalid index")
             return None
 
         item = self.__data__[index.row()]
-        if role == QtCore.Qt.DisplayRole:
+        print(item.get('icon'))
+        if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.DisplayRole:
             return str(item)#item.get('hostname') + '\n' + item.get('tag','')
 
         elif role == QtCore.Qt.DecorationRole:
-            return QtGui.QIcon(item.get('icon', 'icon/computer.png'))
+            print(item.get('icon'))
+            img = QtGui.QIcon(item.get('icon', 'icon/computer.png'))
+            return img
 
         return None	
 
     def flags(self, idx):
-        if idx.isValid():
-            return QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled |\
-                   QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
-        else:
-            return QtCore.Qt.ItemIsDropEnabled |\
-                   QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
+        return QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
 
     def sort(self, order):
         try:
@@ -128,8 +147,6 @@ class ListModel(QtCore.QAbstractListModel):
             logging.error(e, exc_info=True)
 
 
-
-
 from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
@@ -143,16 +160,17 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setIconView()
-
         self.doubleClicked.connect(self.open)
         self.setDragEnabled(False)
-
         self.initUI()
         self.threadpool = QtCore.QThreadPool()
-        self.threadpool.start(Worker(self.force_update))
+
+        self._update_timer  = QtCore.QTimer()
+        self._update_timer.start(1000)
+        self._update_timer.timeout.connect(self.viewport().update)
 
     def initUI(self):
-        model = ListModel(load_ssh_dir(self.dir), self)
+        model = ListModel(load_ssh_dir(self.dir), parent=self)
         self.setModel(model)
         # worker = Worker(model.force_update)
         # self.threadpool.start(worker)
@@ -168,13 +186,9 @@ class ThumbnailListViewer(QtWidgets.QListView):
         }
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
-
-    def force_update(self):
-        while True:
-            if close_all: break
-            # self.repaint()
-            self.update()
-            time.sleep(1)
+    
+    def dataChanged(topLeft, bottomRight, roles):
+        print("recived data changed event")
 
     def open_file(self):
         for item in self.selectedItems():
@@ -191,8 +205,11 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def setIconView(self):
         self.setViewMode(QtWidgets.QListView.IconMode)
         self.setFlow(QtWidgets.QListView.LeftToRight)
-        self.setLayoutMode(QtWidgets.QListView.SinglePass)
+        # self.setLayoutMode(QtWidgets.QListView.SinglePass)
+        self.setLayoutMode(QtWidgets.QListView.Batched)
         self.setResizeMode(QtWidgets.QListView.Adjust)
+        self.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         self.setGridSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
         self.setIconSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
