@@ -4,26 +4,24 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from worker import Worker
 from threading import Thread
 
-from common import close_all
+import common
 from sshDialogForm import SSHInputDialog
-
 
 
 class ListModel(QtCore.QAbstractListModel):
     """Docstring for ListModel. """
+    fupate = QtCore.pyqtSignal(QtCore.QModelIndex)
     def __init__(self, data=[], parent=None, **kwargs):
         QtCore.QAbstractListModel.__init__(self, parent, **kwargs)
         self.parent = parent
         self.__data__ = data
 
         self.delay = 2
-        # self._update_timer  = QtCore.QTimer()
-        # self.threadpool = QtCore.QThreadPool()
-        # uworker = Worker(self.force_update)
-        # self.threadpool.start(Worker(self.force_update))
-
+        self.threadpool = QtCore.QThreadPool()
+        uworker = Worker(self.force_update)
+        self.threadpool.start(Worker(self.force_update))
         self.threads = []
-        self.__daemon__()
+        # self.__daemon__()
         self.__updating_item__ = []
 
     def __daemon__(self):
@@ -38,48 +36,33 @@ class ListModel(QtCore.QAbstractListModel):
             topLeft = self.createIndex(row, 0)
             item = self.__data__[row]
             if item not in self.__updating_item__:
-                print('updating thumbnail of {}'.format(str(item).strip()))
                 logging.info('updating thumbnail of {}'.format(str(item).strip()))
                 self.__updating_item__.append(item)
                 item.update_vncthumnail()
                 self.dataChanged.emit(topLeft, topLeft, [QtCore.Qt.DecorationRole | QtCore.Qt.DisplayRole ])
-                self.dataChanged.emit(self.createIndex(0,0), self.createIndex(self.rowCount(), 0), [])
-                self.layoutChanged.emit()
-                print('dataChanged on {}'.format(item))
+                self.fupate.emit(topLeft)
                 self.__updating_item__.remove(item)
             else:
-                logging.debug('updating thumbnail of {} has already in queue'.format(str(item).strip()))
+                logging.info('updating thumbnail of {} has already in queue'.format(str(item).strip()))
         except Exception as e:
             logging.error(e, exc_info=True)
-
 
     def force_update(self):
         while True:
             for row in range(self.rowCount()):
-                thread = threading.Thread(target=self.force_update_item, args=(row,))
-                thread.daemon = True
-                thread.start()
-                self.threads.append(thread)
-                # worker = Worker(self.force_update_item, row)
-                # self.threadpool.start(worker)
-            if close_all:
-                for t in self.threads:
-                    t.join()
-                logging.debug("Recevice close all signal")
+                worker = Worker(self.force_update_item, row)
+                self.threadpool.start(worker)
+
+            if common.close_all:
+                logging.info("Receviced close all signal")
+                for t in self.threads: t.join()
                 break
             time.sleep(self.delay)
 
     def index(self, row, column=0, parent=QtCore.QModelIndex()):
         if parent.isValid() and parent.column() != 0:
             return QtCore.QModelIndex()
-
-        # parentItem = self.getItem(parent)
-        # childItem = parentItem.child(row)
-        # if childItem:
         return self.createIndex(row, column, parent)
-        # else:
-            # return QtCore.QModelIndex()
-
 
     def getData(self):
         return self.__data__
@@ -100,18 +83,15 @@ class ListModel(QtCore.QAbstractListModel):
         return True
         
     def data(self, index, role = QtCore.Qt.DecorationRole):
-        print("getting data from model")
         if not index.isValid():
             print("invalid index")
             return None
 
         item = self.__data__[index.row()]
-        print(item.get('icon'))
-        if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.DisplayRole:
-            return str(item)#item.get('hostname') + '\n' + item.get('tag','')
+        if role == QtCore.Qt.DisplayRole:
+            return str(item) #item.get('hostname') + '\n' + item.get('tag','')
 
         elif role == QtCore.Qt.DecorationRole:
-            print(item.get('icon'))
             img = QtGui.QIcon(item.get('icon', 'icon/computer.png'))
             return img
 
@@ -127,7 +107,6 @@ class ListModel(QtCore.QAbstractListModel):
             self.layoutChanged.emit()
         except Exception as e:
             logging.error(e, exc_info=True)
-
 
     def sort_by(self, key, order):
         try:
@@ -153,10 +132,9 @@ __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 class ThumbnailListViewer(QtWidgets.QListView):
     """Docstring for ThumbnailListViewer. """
     __DEFAULT_ICON_SIZE__ = QtCore.QSize(320, 260)
-    def __init__(self, dir=__SSH_DIR__, parent=None, **kwargs):
+    def __init__(self, parent=None, **kwargs):
         """TODO: to be defined. """
         QtWidgets.QListView.__init__(self, parent, **kwargs)
-        self.dir = dir
 
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setIconView()
@@ -165,16 +143,11 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.initUI()
         self.threadpool = QtCore.QThreadPool()
 
-        self._update_timer  = QtCore.QTimer()
-        self._update_timer.start(1000)
-        self._update_timer.timeout.connect(self.viewport().update)
+        # self._update_timer  = QtCore.QTimer()
+        # self._update_timer.start(1000)
+        # self._update_timer.timeout.connect(self.viewport().update)
 
     def initUI(self):
-        model = ListModel(load_ssh_dir(self.dir), parent=self)
-        self.setModel(model)
-        # worker = Worker(model.force_update)
-        # self.threadpool.start(worker)
-
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
             'open' : self.open_vncviewer,
@@ -186,10 +159,11 @@ class ThumbnailListViewer(QtWidgets.QListView):
         }
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
-    
-    def dataChanged(topLeft, bottomRight, roles):
-        print("recived data changed event")
 
+    def force_update(self, index):
+        rect = self.visualRect(index)
+        self.viewport().update(rect)
+    
     def open_file(self):
         for item in self.selectedItems():
             if item.get('filepath'):
@@ -286,6 +260,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         for item in self.selectedItems():
             item.close()
 
+
 def main(): 
     import logging
     logging.basicConfig(level=logging.INFO, filename='log.txt',
@@ -297,7 +272,7 @@ def main():
     # w.setFixedHeight(1000)
     w.show() 
     r = app.exec_()
-    close_all = True
+    common.close_all = True
     sys.exit(r) 
 	
 if __name__ == "__main__": 

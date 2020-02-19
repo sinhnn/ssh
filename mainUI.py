@@ -4,11 +4,11 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QWidget
 import logging
 
-from listModel import ThumbnailListViewer
+from listModel import ThumbnailListViewer, ListModel
 from sshTable import SSHTable
 from logWidget import LogWidget, PlainTextEditLogger
+
 import common
-from common import close_all
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -25,12 +25,15 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds)
 
-
+from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file
+__PATH__ = os.path.dirname(os.path.abspath(__file__))
+__SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
     # signalActive = pyqtSignal()
     
-    def __init__(self, aPath=None):
+    def __init__(self, dir=__SSH_DIR__):
+        self.dir = dir
         self.__initalMode = 0
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
@@ -48,16 +51,14 @@ class MainFrame(QtWidgets.QMainWindow):
     def initUI(self):
         mWidgets = QtWidgets.QWidget()
         mlayout = QtWidgets.QVBoxLayout()
-        # DEBUG_FORMAT = logging.Formatter("%(asctime)s %(levelname)-8s  %(message)s")
-        # mlog = PlainTextEditLogger()
-        # mlog.setFormatter(DEBUG_FORMAT)
-        # mlog.setLevel(logging.INFO)
-        # mlog.widget.setFixedHeight(200)
-        # logging.getLogger().addHandler(mlog)
         widgets = ThumbnailListViewer(parent=self)
+        model = ListModel(load_ssh_dir(self.dir), parent=self)
+        widgets.setModel(model)
         mlayout.addWidget(widgets)
-        # mlayout.addWidget(mlog.widget)
         mWidgets.setLayout(mlayout)
+        self._widgets = widgets
+        self._widgets.setIconView()
+        self._widgets.model().fupate.connect(self._widgets.force_update)
 
         self.search = QtWidgets.QLineEdit(self) 
         self.search.setPlaceholderText("Enter address/tags to search")
@@ -72,7 +73,6 @@ class MainFrame(QtWidgets.QMainWindow):
         self.scale.setValue(100)
         self.scale.valueChanged.connect(self.on_scale)
 
-
         self.sort_order = True
         self.sort_order_button = QtWidgets.QToolButton() 
         self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
@@ -82,31 +82,26 @@ class MainFrame(QtWidgets.QMainWindow):
         self.sort_by.editingFinished.connect(self.on_sort)
         self.sort_by.setMaximumWidth(300)
 
-
         self.table = SSHTable(widgets.model().getData())
         self.table.setMinimumSize(800,600)
         self.table.setWindowTitle('SSH Table')
         self.setCentralWidget(mWidgets);
-        self._widgets = widgets
-        self.setIconView()
 
         self.exitAction = QtWidgets.QAction('Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
-        # self.exitAction.triggered.connect(QApplication.quit)
         self.exitAction.triggered.connect(self.on_exit)
 
         self.loadAction = QtWidgets.QAction('Load Directory', self)
         self.loadAction.triggered.connect(self.loadDir)
 
         self.iconViewAction = QtWidgets.QAction('Icon View', self)
-        self.iconViewAction.triggered.connect(self.setIconView)
+        self.iconViewAction.triggered.connect(self._widgets.setIconView)
 
         self.detailViewAction = QtWidgets.QAction('List View', self)
-        self.detailViewAction.triggered.connect(self.setListView)
+        self.detailViewAction.triggered.connect(self._widgets.setListView)
 
         self.sortByNameAction = QtWidgets.QAction('Sort by Name', self)
         self.sortByNameAction.triggered.connect(self.on_sort_by_name)
-
 
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"),
                 self).activated.connect(lambda : self.search.setFocus())
@@ -117,19 +112,10 @@ class MainFrame(QtWidgets.QMainWindow):
         self.openSSHTableAction = QtWidgets.QAction('Open Table', self)
         self.openSSHTableAction.triggered.connect(lambda : self.table.setVisible(True))
 
-
-        # self.logWidget = LogWidget(['log.txt'], parent=self)
-        # self.logWidget.setVisible(False)
-        # self.logWidget.setMinimumSize(800,600)
-        # self.logWidget.setWindowTitle("Logging")
-        # self.viewLogAction = QtWidgets.QAction('View Log', self)
-        # self.viewLogAction.triggered.connect(lambda : self.logWidget.setVisible(True))
-
         self.toolbar = self.addToolBar('Main')
         self.toolbar.addAction(self.iconViewAction)
         self.toolbar.addAction(self.detailViewAction)
         self.toolbar.addAction(self.openSSHTableAction)
-        # self.toolbar.addAction(self.viewLogAction)
         self.toolbar.addWidget(self.scale)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
@@ -148,7 +134,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.setWindowTitle("....")
 
     def on_exit(self):
-        close_all = True
+        common.close_all = True
         QApplication.quit()
 
     def on_scale(self, value):
@@ -175,16 +161,6 @@ class MainFrame(QtWidgets.QMainWindow):
             hide = not (str(event) in str(item.config))
             self._widgets.setRowHidden(i, hide)
     
-    def setIconView(self):
-        self._widgets.setIconView()
-        # self._widgets.setHidden(False)
-        # self.table.setHidden(True)
-
-    def setListView(self):
-        # self._widgets.setHidden(True)
-        # self.table.setHidden(False)
-        self._widgets.setListView()
-        
     def centerWindow(self):
         frameGm = self.frameGeometry()
         screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
@@ -245,6 +221,7 @@ if __name__ == '__main__':
     fileHandler.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(fileHandler)
     logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().propagate = False
     argv = sys.argv
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())

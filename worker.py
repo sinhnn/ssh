@@ -3,6 +3,7 @@ from PyQt5.QtCore import QObject, QRunnable, QThreadPool,pyqtSlot, pyqtSignal
 
 import time
 import traceback, sys
+import logging
 
 class WorkerSignals(QObject):
     '''
@@ -40,18 +41,20 @@ class Worker(QRunnable):
         '''
         Initialise the runner function with passed args, kwargs.
         '''
-        # Retrieve args/kwargs here; and fire processing using them
         try:
-            result = self.fn(*self.args, **self.kwargs)
-        except:
-            traceback.print_exc()
-            exctype, value = sys.exc_info()[:2]
-            self.signals.error.emit((exctype, value, traceback.format_exc()))
-        else:
-            self.signals.result.emit(result)  # Return the result of the processing
-        finally:
-            self.signals.finished.emit()  # Done
-
+            # Retrieve args/kwargs here; and fire processing using them
+            try:
+                result = self.fn(*self.args, **self.kwargs)
+            except:
+                traceback.print_exc()
+                exctype, value = sys.exc_info()[:2]
+                self.signals.error.emit((exctype, value, traceback.format_exc()))
+            else:
+                self.signals.result.emit(result)  # Return the result of the processing
+            finally:
+                self.signals.finished.emit()  # Done
+        except RuntimeError as e:
+            logging.error("RuntimeError: wrapped C/C++ object of type WorkerSignals has been deleted")
 
 class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
