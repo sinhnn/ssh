@@ -38,6 +38,24 @@ def intersection(l1, l2):
     tmp = set(l2)
     return [v for v in l1 if v in tmp]
 
+import collections
+class StoredLoggerHandler(logging.FileHandler):
+    def __init__(self, **kwargs):
+        logging.FileHandler.__init__(self, **kwargs)
+        self.maxlen = 100
+        self.__records__ = collections.deque(maxlen=self.maxlen)
+
+    def emit(self, record):
+        self.__records__.appendleft(record)
+        logging.FileHandler.emit(self, record)
+
+    def get_last_messages(self, n):
+        msgs= []
+        for record in self.__records__:
+            msg = self.format(record).splitlines()
+            msgs.extend(msg)
+            if len(msgs) > n: break
+        return '\n'.join(msgs)
 
 class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
     """Docstring for SSHTunnelForwarder. """
@@ -124,17 +142,17 @@ class SSHClient(object):
         try:
             self.logger = logging.getLogger('SSHClient_{}'.format(self.id))
             logFile = os.path.join(__CACHE__, '{}.txt'.format(self.get('hostname')))
-            if not os.path.isfile(logFile):
-                open(logFile, 'w').write('')
-            fileHandler = logging.FileHandler(logFile, mode='a', encoding='utf-8', delay=False)
-            DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+            if not os.path.isfile(logFile): open(logFile, 'w').write('')
+            fileHandler = StoredLoggerHandler(filename=logFile, mode='a', encoding='utf-8', delay=False)
+            DEBUG_FORMAT = "%(asctime)s %(levelname)-8s  %(message)s"
             fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
             fileHandler.setLevel(logging.DEBUG)
+            self.loghandler = fileHandler
             self.logger.addHandler(fileHandler)
             self.logger.propagate = False
         except Exception as e:
             self.logger = logging
-            logging.error(e)
+            logging.error(e, exc_info=True)
 
     def __str__(self):
         return '{}\n{}'.format(self.config['hostname'],
@@ -178,7 +196,6 @@ class SSHClient(object):
 
     def update(self, k, v):
         if k in self.status.keys():
-            # logging.error(self.__s__('{} is readonly'))
             self.__s__('{} is readonly', level=logging.ERROR)
             return
         self.config[k] = v
@@ -186,16 +203,13 @@ class SSHClient(object):
 
     def is_valid(self):
         for r in SSHClient.__REQUIRED__:
-            # if r not in self.config.keys():
             if r not in self.config.keys() and self.config.get(r, '') == '':
-                # logging.error(self.__s__('must has {}'.format(r)))
                 self.__s__('must has {}'.format(r), level=logging.ERROR)
                 return False
 
         k  = self.config.keys()
         for ones in SSHClient.__ANY__:
             if not len(intersection(ones, k)):
-                # logging.error(self.__s__('required one parameter in {}'.format(ones)))
                 self.__s__('required one parameter in {}'.format(ones), level=logging.ERROR)
                 return False
         return True
@@ -206,7 +220,6 @@ class SSHClient(object):
             return True
 
     def __del__(self):
-        # logging.error(self.__s__('closing ssh client'))
         self.__s__('closing ssh client', level=logging.ERROR)
         for t in self.tunnels:
             t.stop()
@@ -232,20 +245,16 @@ class SSHClient(object):
                     results['done'].append(f)
                 except SCPException as error:
                     results['failed'].append(f)
-                    # logging.error(self.__s__(error), exc_info=True)
                     self.__s__(error, level=logging.ERROR, exc_info=True)
             scp.close()
             client.close()
         except SCPException as error:
-            # logging.error(self.__s__(error), exc_info=True)
             self.__s__(error, level=logging.ERROR, exc_info=True)
         finally:
             return results
 
     def download(self, remote_path, local_path, recursive=False, preserve_times=False):
         results = {'done': [], 'failed' : []}
-        # logging.info(self.__s__('downloading {} to {}'.format(remote_path, local_path)))
-        self.__s__('downloading {} to {}'.format(remote_path, local_path), level=logging.INFO)
         try:
             client = self.connect()
             if not client: return results
@@ -253,14 +262,15 @@ class SSHClient(object):
             try:
                 scp.get(remote_path, local_path, recursive, preserve_times)
                 results['done'].append(local_path)
+            except SCPException as error:
+                results['failed'].append(local_path)
+                self.__s__(error, level=logging.ERROR)
             except Exception as error:
                 results['failed'].append(local_path)
-                # logging.error(self.__s__(error), exc_info=True)
                 self.__s__(error, level=logging.ERROR, exc_info=True)
             scp.close()
             client.close()
         except Exception as error:
-            logging.error(self.__s__(error), exc_info=True)
             self.__s__(error, level=logging.ERROR, exc_info=True)
         # finally:
             # print(results)
@@ -280,7 +290,6 @@ class SSHClient(object):
         if not self.is_valid():
             return False
         if tries <= 0 :
-            # logging.error(self.__s__('unable to connect'))
             self.__s__('unable to connect', level=logging.ERROR)
             return False
 
@@ -298,7 +307,6 @@ class SSHClient(object):
             self.__delete_icon__()
             return self.connect(client=client, tries=tries-1)
         except Exception as e:
-            # logging.error(self.__s__('unable to connect from {} configurations, because of {}'.format(self.config, e)), exc_info=True)
             self.__s__('unable to connect from {} configurations, because of {}'.format(self.config, e), level=logging.ERROR, exc_info=True)
             return False
 
@@ -306,7 +314,7 @@ class SSHClient(object):
     def create_tunnel(self, port=None, **kwargs):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
         port = self.portscanner.getAvailablePort(range(6000, 7000))
-        logging.info('trying open port {}'.format(port))
+        self.__s__('trying open port {}'.format(port),level=logging.INFO)
 
         try:
             local_bind_address = ('127.0.0.1', port)
@@ -324,7 +332,6 @@ class SSHClient(object):
             if tunnel: self.tunnels.append(tunnel)
             return tunnel
         except Exception as e:
-            # logging.error(self.__s__(e), exc_info=True)
             self.__s__(e, level=logging.ERROR, exc_info=True)
             return False
 
@@ -342,46 +349,33 @@ class SSHClient(object):
 
 
     def exec_command(self, command):
+        self.__s__('executing {}'.format(command), level=logging.INFO)
         client = self.connect()
-        if not client:
-            return (False, [], [])
-        try:
-            logging.info('{}@{}:{}'.format(self.config['username'], self.config['hostname'], command))
-            try:
-                stdin, stdout, stderr = client.exec_command(command)
-            except Exception as e:
-                logging.error(e)
-                return (False, [], [])
+        if not client: return (False, [], [])
 
-            while not stdout.channel.exit_status_ready():
-                try:
-                    # logging.info(self.__s__("reading client ouput from command `{}`".format(command)))
-                    self.__s__("reading client ouput from command `{}`".format(command), level=logging.INFO)
-                    if stdout.channel.recv_ready():
-                        line = stdout.readlines()
-                        # logging.info(self.__s__(''.join(line)))
-                        self.__s__(''.join(line), level=logging.INFO)
-                        self.status['progress'] = line
-                        if 'password' in '\n'.join(line):
-                            stdin.write(self.config['password'] + '\n')
-                            stdin.flush()
-                        # time.sleep(0.1)
-                except Exception as e:
-                    # logging.error(self.__s__(e))# , exc_info=True)
-                    self.__s__(e, level=logging.ERROR)# , exc_info=True)
-                    break
-            logging.info('!!!DONE')
-            r_out, r_err = stdout.readlines(), stderr.readlines()
-            # r_err = stderr.readlines()
-            client.close()
-        except RuntimeError as e:
-            # logging.error(self.__s__(e))# , exc_info=True)
-            self.__s__(e, level=logging.ERROR)# , exc_info=True)
-            return (None, None, None)
+        try:
+            stdin, stdout, stderr = client.exec_command(command)
         except Exception as e:
-            # logging.error(self.__s__(e), exc_info=True)
-            self.__s__(e, level=logging.ERROR)# , exc_info=True)
-            return (None, None, None)
+            self.__s__(e, level=logging.ERROR)
+            return (False, [], [])
+
+        while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready():
+            try:
+                line = stdout.readlines()
+                if 'password' in ' '.join(line):
+                    stdin.write(self.config['password'] + '\n')
+                    stdin.flush()
+
+                line.extend(stderr.readlines())
+
+                if not len(line): continue
+                self.__s__("{}\n{}".format(command, '\n'.join(line)), level=logging.INFO)
+                self.status['progress'] = line
+            except Exception as e:
+                self.__s__(e, level=logging.ERROR)
+                return (False, [], [])
+        r_out, r_err = stdout.readlines(), stderr.readlines()
+        client.close()
         return (command, r_out, r_err)
 
     def invoke_shell(self):
@@ -404,7 +398,7 @@ class SSHClient(object):
                     ts.append(t)
 
         if ts:
-            logging.info("Found running tunnel")
+            self.__s__("Found running tunnel", level=logging.INFO)
         if not ts:
             _  = self.create_tunnel(remote_bind_address=remote_bind_address)
             if _: ts.append(_)
@@ -416,17 +410,13 @@ class SSHClient(object):
             self.create_vncserver(1)
             ts = self.__get_vnctunnel__()
             if not ts: 
-                # logging.error(self.__s__('unable to create tunnel for VNC'))
-                self.__s__(e, level=logging.ERROR)# , exc_info=True)
                 return False
             subprocess.call([VNCVIEWER, ts[0].local_bind_address_str()])
             ts[0].stop()
 
         except FileNotFoundError:
-            # logging.error(self.__s__('vncviewer not found'), exc_info=True)
             self.__s__('vncviewer not found', level=logging.ERROR)# , exc_info=True)
         except Exception as e:
-            # logging.error(self.__s__(e), exc_info=True)
             self.__s__(e, level=logging.ERROR, exc_info=True)
 
     def update_vncthumnail(self):
@@ -463,15 +453,18 @@ class SSHClient(object):
     def vncscreenshot(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
         command = self.exec_command('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg')[0]
-        if command == False:
-            try: os.remove(local_path)
-            except: pass
+        if command == False or command == None:
+            try:
+                os.remove(local_path)
+            except:
+                pass
             return self.__delete_icon__()
 
         time.sleep(2)
         self.download(remote_path='~/screenshot_1-thumb.jpg', local_path=local_path)
 
-        if os.path.isfile(local_path): self.status['icon'] = local_path
+        if os.path.isfile(local_path):
+            self.status['icon'] = local_path
         else: self.__delete_icon__()
 
 
@@ -480,7 +473,7 @@ class SSHClient(object):
             '-geometry', '1280x720',
             "--I-KNOW-THIS-IS-INSECURE", "-securitytypes", "TLSNone,X509None,None",
             "-localhost", "yes",
-            "-alwaysshared"
+            "-alwaysshared",
             ':{}'.format(x)
         ]
         command = ' '.join(args)

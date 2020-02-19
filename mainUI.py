@@ -228,5 +228,9 @@ if __name__ == '__main__':
     w = MainFrame()
     # screenrect = QApplication::desktop().screenGeometry();
     w.move(0,0)
+    if os.path.isfile('stylesheet.css'):
+        with open('stylesheet.css', 'r') as fp:
+            # w.setStyleSheet("QToolTip{ border: 1px solid white; font-family: 'Courier New';}")
+            w.setStyleSheet(fp.read())
     w.show()
     app.exec_()

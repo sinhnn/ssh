@@ -89,7 +89,13 @@ class ListModel(QtCore.QAbstractListModel):
 
         item = self.__data__[index.row()]
         if role == QtCore.Qt.DisplayRole:
-            return str(item) #item.get('hostname') + '\n' + item.get('tag','')
+            return str(item)
+
+        elif role == QtCore.Qt.ToolTipRole:
+            try:
+                return item.loghandler.get_last_messages(10)
+            except Exception as e:
+                return str( e)
 
         elif role == QtCore.Qt.DecorationRole:
             img = QtGui.QIcon(item.get('icon', 'icon/computer.png'))
