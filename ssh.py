@@ -24,6 +24,7 @@ if platform.system() == "Windows":
     SCP = r'C:\Windows\System32\OpenSSH\scp.exe' 
     VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
     VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
+    OPEN_SSH_IN_TERMINAL = ["cmd.exe", "/k", "ssh.exe", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"]
 elif platform.system() == "Linux":
     CMD = "ssh"
     SCP = 'scp' 
@@ -233,7 +234,9 @@ class SSHClient(object):
     def close(self):
         pass
 
+
     def upload(self, files, remote_path):
+        self.__s__('upload {} to {}'.format(files, remote_path), level=logging.INFO)
         results = {'done': [], 'failed' : []}
         try:
             client = self.connect()
@@ -277,14 +280,13 @@ class SSHClient(object):
         return results
 
     def scp_by_subprocess(self, src_path, dst_path, recursive=False):
-        args = [SCP,  
-            '-o', 'CheckHostIP=no',
-            '-i', self.config['key_filename']
-        ]
+        args = [SCP]
+        args.extend(self.__base_opt__())
         if recursive: args.append('-r')
         args.append(src_path)
         args.append(dst_path)
-        return subprocess.call(args, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT) 
+        proc = subprocess.call(args, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT)
+        return proc
 
     def connect(self, client=None, tries=2):
         if not self.is_valid():
@@ -326,8 +328,6 @@ class SSHClient(object):
                 local_bind_address = local_bind_address, \
                 **kwargs
             )
-            # p = tunnel.start_by_subprocess()
-            # if p: self.processes.append(p)
             tunnel.start()
             if tunnel: self.tunnels.append(tunnel)
             return tunnel
@@ -335,17 +335,38 @@ class SSHClient(object):
             self.__s__(e, level=logging.ERROR, exc_info=True)
             return False
 
+    def create_tunnel_subprocess(self, port=None, **kwargs):
+        #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
+        port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
+        self.__s__('trying open port {}'.format(port),level=logging.INFO)
+        args = [CMD]
+        args.append('-C2qTnN')
+        args.extend(['-L', '{}:localhost:5901' port])
+        args.extend(self.__base_opt__())
+        
+        proc = subprocess.Popen(args)
+        return proc
 
-    def exec_command_by_subprocess(self, command):
-        args = [CMD,
-                '-o', "CheckHostIP=no",
+
+    def __base_opt__(self):
+        args = ['-o', "CheckHostIP=no",
                 '-o', "ServerAliveInterval=60",
                 '-o', "TCPKeepAlive=true",
-                '-i', self.config['key_filename'],
-                '{}@{}'.format(self.config['username'], self.config['hostname']),
-                command
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "StrictHostKeyChecking=no"
         ]
-        return subprocess.call(args, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT) 
+        if self.config.get('key_filename'):
+            args.extend(['-i', self.config['key_filename']])
+        args.append('{}@{}'.format(self.config['username'], self.config['hostname']))
+        return args
+
+    def exec_command_by_subprocess(self, command):
+        args = [CMD]
+        args.extend(self.__base_opt__())
+        args.append(command)
+        # subprocess.Popen(args, creationflags = subprocess.CREATE_NEW_CONSOLE )
+        proc = subprocess.call(args, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT) 
+        return proc
 
 
     def exec_command(self, command):
@@ -379,10 +400,11 @@ class SSHClient(object):
         return (command, r_out, r_err)
 
     def invoke_shell(self):
-        client = self.connect()
-        if not client: return None
-        client.invoke_shell()
-        client.close()
+        args = OPEN_SSH_IN_TERMINAL.copy()
+        if self.config.get("key_filename"):
+            args.extend(["-i", self.config.get("key_filename")])
+        args.append("{}@{}".format(self.config.get("username"), self.config.get("hostname")))
+        subprocess.Popen(args, creationflags = subprocess.CREATE_NEW_CONSOLE )
 
     def exec_file(self, file):
         self.upload(file, remote_path='~/.cache')

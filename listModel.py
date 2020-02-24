@@ -252,8 +252,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
         if not files: return
 
         for item in self.selectedItems():
-            print(item)
-            # item.upload(files)
+            worker = Worker(item.upload, files=files, remote_path='~')
+            self.threadpool.start(worker)
 
     def download(self, path):
         for item in self.selectedItems():
