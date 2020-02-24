@@ -341,7 +341,7 @@ class SSHClient(object):
         self.__s__('trying open port {}'.format(port),level=logging.INFO)
         args = [CMD]
         args.append('-C2qTnN')
-        args.extend(['-L', '{}:localhost:5901' port])
+        args.extend(['-L', '{}:localhost:5901'.format(port)])
         args.extend(self.__base_opt__())
         
         proc = subprocess.Popen(args)
