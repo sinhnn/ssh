@@ -313,7 +313,7 @@ class SSHClient(object):
     # https://sshtunnel.readthedocs.io/en/latest/
     def create_tunnel(self, port=None, **kwargs):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
-        port = self.portscanner.getAvailablePort(range(6000, 7000))
+        port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
         self.__s__('trying open port {}'.format(port),level=logging.INFO)
 
         try:
