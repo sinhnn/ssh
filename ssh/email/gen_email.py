@@ -9,7 +9,10 @@ args = parser.parse_args()
 
 
 __DICT__ = {
-    "urls" : ["https://www.youtube.com/watch?v=zCHj1SM2FmQ", "https://www.youtube.com/watch?v=aXwBhcJdMco", "https://www.youtube.com/watch?v=hKBKE0umI7s", "https://www.youtube.com/watch?v=ABGHnTCQHLw", "https://www.youtube.com/watch?v=2MjFvIx1pRY", "https://www.youtube.com/watch?v=605Tyo87YbI"],
+    "urls" : ["https://www.youtube.com/watch?v=k24e0_WzAM4",
+        "https://www.youtube.com/watch?v=0E7Fp-vNIf4",
+        "https://www.youtube.com/watch?v=Ab9EFkjnE3g"
+    ],
     "email": {"username": "example.com", "password": "password"}
 }
 
@@ -19,7 +22,6 @@ for line in fp.readlines():
     info = line.strip()
     if not info:
         continue
-
 
     data = re.split(r'\s+', info)
     print(data)
