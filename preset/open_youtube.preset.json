@@ -1,4 +1,4 @@
 {
 	"name" : "Youtube",
-	"value"  : "firefox --new-tab https://youtube.com"
+	"value"  : "DISPLAY=:1 firefox --new-tab https://youtube.com"
 }

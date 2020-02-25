@@ -5,7 +5,7 @@ from worker import Worker
 from threading import Thread
 
 import common
-from sshDialogForm import SSHInputDialog
+from sshDialogForm import SSHInputDialog, SCPDialog
 
 
 class ListModel(QtCore.QAbstractListModel):
@@ -161,6 +161,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'new' : self.new_item,
             'edit' : self.open_file,
             'upload' : self.upload,
+            'download' : self.download,
             'command' : self.exec_command, # from file or command
         }
         for k, v in self.actions.items():
@@ -244,21 +245,30 @@ class ThumbnailListViewer(QtWidgets.QListView):
             self.threadpool.start(worker)
 
     def upload(self):
-        dialog = QtWidgets.QFileDialog(self)
-        dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True);
-        dialog.setFileMode(QtWidgets.QFileDialog.Directory |
-                QtWidgets.QFileDialog.ExistingFiles)
-        files, _ = dialog.getOpenFileNames(self, 'Upload files')
-        if not files: return
-
+        dialog = SCPDialog(download=False)
+        info = dialog.getResult()
+        if not info: return
         for item in self.selectedItems():
-            # worker = Worker(item.upload, files=files, remote_path='~')
-            worker = Worker(item.scp_by_subprocess,recursive=False,files=files, remote_path='~')
+            worker = Worker(item.upload_by_subprocess, 
+                        recursive=False,
+                        src_path=info['src_path'],
+                        dst_path=info['dst_path'])
+
             self.threadpool.start(worker)
 
-    def download(self, path):
+    def download(self):
+        dialog = SCPDialog(download=True)
+        info = dialog.getResult()
+        if not info: return None
         for item in self.selectedItems():
-            print(item)
+            worker = Worker(item.download_by_subprocess, 
+                        recursive=False,
+                        src_path=info['src_path'],
+                        dst_path=info['dst_path'])
+
+            self.threadpool.start(worker)
+
+
 
     def open(self):
         self.open_vncviewer()

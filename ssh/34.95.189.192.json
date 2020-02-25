@@ -1,0 +1,10 @@
+{
+    "config": {
+        "hostname": "34.95.189.192",
+        "username": "work",
+        "key_filename": "C:/Users/Admin/Documents/Github/ssh/gcloud/id_rsa"
+    },
+    "tags": [
+        ""
+    ]
+}

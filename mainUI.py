@@ -221,7 +221,7 @@ if __name__ == '__main__':
     fileHandler.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(fileHandler)
     logging.getLogger().setLevel(logging.DEBUG)
-    logging.getLogger().propagate = False
+    logging.getLogger().propagate = True
     argv = sys.argv
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())

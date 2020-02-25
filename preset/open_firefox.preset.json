@@ -1,4 +1,4 @@
 {
 	"name" : "Open Firefox",
-	"value"  : "firefox"
+	"value"  : "DISPLAY=:1 firefox"
 }
