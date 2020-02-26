@@ -70,7 +70,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.scale.setTickInterval(10)
         self.scale.setTickPosition(QtWidgets.QSlider.TicksBothSides)
         self.scale.setFixedWidth(150)
-        self.scale.setValue(100)
+        self.scale.setValue(50)
         self.scale.valueChanged.connect(self.on_scale)
 
         self.sort_order = True

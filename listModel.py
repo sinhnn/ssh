@@ -18,6 +18,7 @@ class ListModel(QtCore.QAbstractListModel):
 
         self.delay = 2
         self.threadpool = QtCore.QThreadPool()
+        # self.threadpool.setMaxThreadCount(100)
         uworker = Worker(self.force_update)
         self.threadpool.start(Worker(self.force_update))
         self.threads = []
@@ -137,7 +138,10 @@ __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 class ThumbnailListViewer(QtWidgets.QListView):
     """Docstring for ThumbnailListViewer. """
-    __DEFAULT_ICON_SIZE__ = QtCore.QSize(320, 260)
+    __DEFAULT_ICON_SIZE__ = QtCore.QSize(160, 65)
+    __DEFAULT_GRID_SIZE__ = QtCore.QSize(160, 130 )
+    __LARGE_ICON_SIZE__ = QtCore.QSize(320, 180)
+    __LARGE_GRID_SIZE__ = QtCore.QSize(320, 260)
     def __init__(self, parent=None, **kwargs):
         """TODO: to be defined. """
         QtWidgets.QListView.__init__(self, parent, **kwargs)
@@ -151,6 +155,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
         self.vncviewer_threads = QtCore.QThreadPool()
         self.terminal_threads = QtCore.QThreadPool()
+        self.setStyleSheet("font-size: 12px;")
 
         # self._update_timer  = QtCore.QTimer()
         # self._update_timer.start(1000)
@@ -181,11 +186,16 @@ class ThumbnailListViewer(QtWidgets.QListView):
                 os.startfile(str(item.get('filepath')))
 
     def scaleIcon(self, v):
-        nw = int(ThumbnailListViewer.__DEFAULT_ICON_SIZE__.width() * v)
-        nh = int(ThumbnailListViewer.__DEFAULT_ICON_SIZE__.height() * v)
+        nw = int(ThumbnailListViewer.__LARGE_ICON_SIZE__.width() * v)
+        nh = int(ThumbnailListViewer.__LARGE_ICON_SIZE__.height() * v)
+        ns = QtCore.QSize(nw, nh)
+        self.setIconSize(ns)
+
+        nw = int(ThumbnailListViewer.__LARGE_GRID_SIZE__.width() * v)
+        nh = int(ThumbnailListViewer.__LARGE_GRID_SIZE__.height() * v)
+        self.setStyleSheet("font-size: {}px;".format(8 + int(8*v)))
         ns = QtCore.QSize(nw, nh)
         self.setGridSize(ns)
-        self.setIconSize(ns)
 
     def setIconView(self):
         self.setViewMode(QtWidgets.QListView.IconMode)
@@ -194,11 +204,13 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setLayoutMode(QtWidgets.QListView.Batched)
         self.setResizeMode(QtWidgets.QListView.Adjust)
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        # self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
-        self.setGridSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
-        self.setIconSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
+        self.scaleIcon(0.5)
         self.setSpacing(0)
+        # self.setGridSize(ThumbnailListViewer.__DEFAULT_GRID_SIZE__)
+        # self.setIconSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
+        # self.setSpacing(0)
         self.setUniformItemSizes(False)
 
     def setListView(self):
@@ -269,7 +281,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def download(self):
         dialog = SCPDialog(download=True)
         info = dialog.getResult()
-        if not info: return None
+        if not info:
+            return None
         for item in self.selectedItems():
             worker = Worker(item.download_by_subprocess, 
                         recursive=False,

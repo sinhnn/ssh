@@ -21,7 +21,7 @@ __CACHE__ = os.path.join(__PATH__, 'cache')
 os.makedirs(__CACHE__, exist_ok=True)
 
 if platform.system() == "Windows":
-    CMD = "ssh"
+    CMD = r'C:\Windows\System32\OpenSSH\ssh.exe' 
     SCP = r'C:\Windows\System32\OpenSSH\scp.exe' 
     VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
     VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
@@ -37,13 +37,16 @@ else:
 
 COMMON_SSH_OPTS = [
     '-o', "CheckHostIP=no",
-    '-o', "ServerAliveInterval=60",
-    '-o', "TCPKeepAlive=true",
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
 ]
+KEEP_ALIVE_SSH_OPTS = [
+    '-o', "ServerAliveInterval=60",
+    '-o', "TCPKeepAlive=true"
+]
 
 
+SCREENSHOT_CMD = 'DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg'
 
 def intersection(l1, l2):
     tmp = set(l2)
@@ -98,9 +101,9 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         return True
 
     def start_by_subprocess(self):
-        print("----------------------------------------------------")
         args = [CMD]
         args.extend(COMMON_SSH_OPTS)
+        args.extend(KEEP_ALIVE_SSH_OPTS)
         # args.extend(['-f', '-C2qTnN'])
         args.extend(['-C2qTnN'])
 
@@ -113,7 +116,6 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
             args.extend(['-D', str(self.get('local_bind_port'))]) 
             
         args.append('{}@{}'.format(self.config['ssh_username'], self.config['ssh_address_or_host'][0]))
-        print(args)
         if not self.config.get('ssh_pkey'):
             proc = psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
         else:
@@ -294,7 +296,7 @@ class SSHClient(object):
         return results
 
 
-    def scp_by_subprocess(self, src_path, dst_path, recursive=False,quiet=False):
+    def scp_by_subprocess(self, src_path, dst_path, recursive=False, quiet=False, **kwargs):
         args= [SCP]
         args.extend(self.__base_opt_scp__())
         if recursive == True: args.append('-r')
@@ -303,8 +305,8 @@ class SSHClient(object):
         else:
             args.append(src_path)
         args.append(dst_path)
-        if not quiet: self.__s__(args, level=logging.INFO)
-        returncode = subprocess.call(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.__s__(args, level=logging.INFO)
+        returncode = subprocess.Popen(args, **kwargs)
         if returncode != 0:
             self.__s__("unable to copy {} to {}".format(src_path, dst_path), level=logging.ERROR)
         return returncode
@@ -312,19 +314,6 @@ class SSHClient(object):
     def upload_by_subprocess(self, src_path, dst_path, recursive=False):
         p = self.__hostaddress_path__(dst_path)
         return self.scp_by_subprocess(src_path, p, recursive)
-        # args = [SCP]
-        # args.extend(self.__base_opt_scp__())
-        # if recursive: args.append('-r')
-        # if isinstance(src_path, list):
-        #     args.extend(src_path)
-        # else:
-        #     args.append(src_path)
-        # args.append('{}:{}'.format(self.__hostaddress__(), dst_path))
-        # self.__s__(args, level=logging.INFO)
-        # returncode = subprocess.call(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # if returncode != 0:
-            # self.__s__("unable to upload {}".format(src_path), level=logging.ERROR)
-        # return returncode
 
     def __hostaddress_path__(self, path):
         return '{}:{}'.format(self.__hostaddress__(), path)
@@ -334,26 +323,8 @@ class SSHClient(object):
             p = [self.__hostaddress_path__(p) for p in src_path]
         else:
             p = self.__hostaddress_path__(src_path)
+
         return self.scp_by_subprocess(p, dst_path, recursive)
-
-
-        # args = [SCP]
-        # args.extend(self.__base_opt_scp__())
-        # if recursive: args.append('-r')
-        # if isinstance(src_path, list):
-        #     args.extend([self.__hostaddress_path__(p) for p in src_path])
-        # else:
-        #     args.append(self.__hostaddress_path__(src_path))
-
-        # args.append(dst_path)
-        # self.__s__(args, level=logging.INFO)
-
-        # returncode = subprocess.call(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # if returncode != 0:
-        #     self.__s__("unable to download {}".format(src_path), level=logging.ERROR)
-        # self.__s__(proc, level=logging.INFO)
-        # return returncode
-
 
 
     def connect(self, client=None, tries=2):
@@ -409,10 +380,10 @@ class SSHClient(object):
         port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
         self.__s__('trying open port {}'.format(port),level=logging.INFO)
         args = [CMD]
-        args.append('-C2qTnN')
+        args.extend(COMMON_SSH_OPTS)
+        args.extend(KEEP_ALIVE_SSH_OPTS)
         args.extend(['-L', '{}:localhost:5901'.format(port)])
         args.extend(self.__base_opt__())
-        print("Create tunnel args: {}".format(args))
         proc = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
         self.tunnel_proc.append(proc)
         return proc
@@ -434,17 +405,22 @@ class SSHClient(object):
         return '{}@{}'.format(self.config['username'], self.config['hostname'])
 
 
+    #ERROR: hangout when running
     def exec_command_subprocess(self, command, log=True, **kwargs):
-        if log: self.__s__("excuting {}".format(s), level=logging.INFO)
+        # if log: self.__s__("excuting {}".format(command), level=logging.INFO)
         args = [CMD]
+        args.append('-f')
         args.extend(self.__base_opt__())
         args.append(command)
+        # self.__s__('excuting {}'.format(args))
         returncode = subprocess.call(args, **kwargs)
+        proc.wait()
         return returncode
 
 
     def exec_command(self, command, log=True):
-        if log: self.__s__('executing {}'.format(command), level=logging.INFO)
+        if log:
+            self.__s__('executing {}'.format(command), level=logging.INFO)
         client = self.connect()
         if not client: return (False, [], [])
 
@@ -460,9 +436,7 @@ class SSHClient(object):
                 if 'password' in ' '.join(line):
                     stdin.write(self.config['password'] + '\n')
                     stdin.flush()
-
                 line.extend(stderr.readlines())
-
                 if not len(line): continue
                 self.__s__("{}\n{}".format(command, '\n'.join(line)), level=logging.INFO)
                 self.status['progress'] = line
@@ -530,6 +504,7 @@ class SSHClient(object):
         if self.vncthumb:
             # self.vncsnapshot()
             self.vncscreenshot_subprocess()
+            # self.vncscreenshot()
             # time.sleep(self.delay)
 
     def vncsnapshot(self):
@@ -556,7 +531,7 @@ class SSHClient(object):
 
     def vncscreenshot(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        command = self.exec_command('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', log=False)[0]
+        command = self.exec_command(SCREENSHOT_CMD, log=False)[0]
         if command == False or command == None:
             try:
                 os.remove(local_path)
@@ -564,7 +539,8 @@ class SSHClient(object):
                 pass
             return self.__delete_icon__()
 
-        time.sleep(2)
+        time.sleep(1)
+        # self.download_by_subprocess(remote_path='~/screenshot_1-thumb.jpg', local_path=local_path)
         self.download(remote_path='~/screenshot_1-thumb.jpg', local_path=local_path)
 
         if os.path.isfile(local_path):
@@ -573,11 +549,22 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', log=False, stdout=subprocess.DEVNULL)
-        if command != 0:
+        # command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', stdout=subprocess.DEVNULL)
+        # if command != 0:
+        #     try: os.remove(local_path)
+        #     except Exception as e:
+        #         self.__s__(e, level=logging.ERROR, exc_info=True)
+        #         pass
+        #     return self.__delete_icon__()
+
+
+        command = self.exec_command(SCREENSHOT_CMD, log=False)
+        if command == False or command == None:
             try: os.remove(local_path)
             except: pass
             return self.__delete_icon__()
+        time.sleep(1)
+
         self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path)
 
         if os.path.isfile(local_path):

@@ -72,16 +72,16 @@ class SCPDialog(QtWidgets.QDialog):
         if self.result() == QtWidgets.QDialog.Rejected:
             return None
         info = {
-            'src_path' : self.widgets['src_path']['raw_value'],
-            'dst_path' : self.widgets['dst_path']['raw_value'],
+            'src_path' : self.widgets['src_path']['value'],
+            'dst_path' : self.widgets['dst_path']['value'],
             'download' : self.download,
         }
         return info
 
     def browser_src(self):
         dialog = QtWidgets.QFileDialog(self, "Open File/Directory", "", "*.*")
-        dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles);
-        filename, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Open Files")
+        dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile);
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open Files")
         self.widgets['src_path']['raw_value'] = filename
         self.widgets['src_path']['widget'].setText('\n'.join(filename))
 
