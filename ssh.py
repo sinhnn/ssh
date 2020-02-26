@@ -1,4 +1,5 @@
 import os,sys, subprocess, platform, threading, time
+import psutil
 import json
 import logging
 import socket
@@ -33,6 +34,15 @@ elif platform.system() == "Linux":
 else:
     print("unsupported platform "  + platform.system())
     sys.exit(1)
+
+COMMON_SSH_OPTS = [
+    '-o', "CheckHostIP=no",
+    '-o', "ServerAliveInterval=60",
+    '-o', "TCPKeepAlive=true",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "StrictHostKeyChecking=no"
+]
+
 
 
 def intersection(l1, l2):
@@ -83,39 +93,29 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         return True
 
     def start_by_subprocess(self):
-        args = [CMD,
-                '-o', "CheckHostIP=no",
-                '-o', "ServerAliveInterval=60",
-                '-o', "TCPKeepAlive=true",
-                '-f', '-C2qTnN',
-        ]
+        args = [CMD]
+        args.extend(COMMON_SSH_OPTS)
+        args.extend(['-f', '-C2qTnN'])
+
         if self.config.get('ssh_pkey'):
             args.extend(['-i'], self.config.get('ssh_pkey'))
 
-        elif self.config.get('ssh_password'):
-            logging.error('ssh third party doest not support password on command line')
-            return None
-
         if self.config.get('remote_bind_address'):
-            args.extend(['-L', '{}:{}'.format(self.config['local_bind_address'][1], self.remote_bind_address_str()),
-                '{}@{}'.format(self.config['ssh_username'],
-                self.config['ssh_address_or_host'][0])
-            ])
+            args.extend(['-L', '{}:{}'.format(self.local_bind_port, self.remote_bind_address_str())])
         else:
-            args.extend([
-                '-D', str(self.config['local_bind_port']),
-                '{}@{}'.format(self.config['ssh_username'],
-                self.config['ssh_address_or_host'][0])
-            ])
+            args.extend(['-D', str(self.config['local_bind_port'])]) 
+            
+        args.append('{}@{}'.format(self.config['ssh_username'], self.config['ssh_address_or_host'][0]))
+        if not self.config.get('ssh_pkey'):
+            proc = psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            proc = psutil.Popen(args)
+        return proc
 
-        return subprocess.Popen(args)
 
-
-COMMON_SSH_OPTS = [
-    '-o', "CheckHostIP=no",
-    '-o', "ServerAliveInterval=60",
-    '-o', "TCPKeepAlive=true",
-]
+    def is_alive(self):
+        try: a = sshtunnel.SSHTunnelForwarder.is_alive()
+        except: a = False
 
 class SSHClient(object):
     '''
@@ -134,6 +134,7 @@ class SSHClient(object):
         self.status = {'screenshot' : None,  'vncserver': []}
         self.initLogger()
         self.tunnels = []
+        self.tunnel_proc = []
         self.portscanner = PortScanner()
         self.processes = [] # store all child process
         self.threads = []
@@ -150,6 +151,7 @@ class SSHClient(object):
             fileHandler.setLevel(logging.DEBUG)
             self.loghandler = fileHandler
             self.logger.addHandler(fileHandler)
+            self.logger.setLevel(logging.DEBUG)
             self.logger.propagate = False
         except Exception as e:
             self.logger = logging
@@ -229,7 +231,8 @@ class SSHClient(object):
         for t in self.threads:
             # t.stop()
             t.join()
-
+        for t in self.tunnel_proc:
+            t.terminate()
 
     def close(self):
         pass
@@ -279,14 +282,42 @@ class SSHClient(object):
             # print(results)
         return results
 
-    def scp_by_subprocess(self, src_path, dst_path, recursive=False):
+    def upload_by_subprocess(self, src_path, dst_path, recursive=False):
         args = [SCP]
-        args.extend(self.__base_opt__())
+        args.extend(self.__base_opt_scp__())
         if recursive: args.append('-r')
-        args.append(src_path)
+        if isinstance(src_path, list):
+            args.extend(src_path)
+        else:
+            args.append(src_path)
+        args.append('{}:{}'.format(self.__hostaddress__(), dst_path))
+        self.__s__(args, level=logging.INFO)
+        returncode = subprocess.call(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if returncode != 0:
+            self.__s__("unable to upload {}".format(src_path), level=logging.ERROR)
+        return returncode
+
+    def __hostaddress_path__(self, path):
+        return '{}:{}'.format(self.__hostaddress__(), path)
+
+    def download_by_subprocess(self, src_path, dst_path, recursive=False):
+        args = [SCP]
+        args.extend(self.__base_opt_scp__())
+        if recursive: args.append('-r')
+        if isinstance(src_path, list):
+            args.extend([self.__hostaddress_path__(p) for p in src_path])
+        else:
+            args.append(self.__hostaddress_path__(src_path))
+
         args.append(dst_path)
-        proc = subprocess.call(args, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT)
-        return proc
+        self.__s__(args, level=logging.INFO)
+        returncode = subprocess.call(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if returncode != 0:
+            self.__s__("unable to download {}".format(src_path), level=logging.ERROR)
+        self.__s__(proc, level=logging.INFO)
+        return returncode
+
+
 
     def connect(self, client=None, tries=2):
         if not self.is_valid():
@@ -311,7 +342,7 @@ class SSHClient(object):
         except Exception as e:
             self.__s__('unable to connect from {} configurations, because of {}'.format(self.config, e), level=logging.ERROR, exc_info=True)
             return False
-
+    
     # https://sshtunnel.readthedocs.io/en/latest/
     def create_tunnel(self, port=None, **kwargs):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
@@ -329,13 +360,14 @@ class SSHClient(object):
                 **kwargs
             )
             tunnel.start()
-            if tunnel: self.tunnels.append(tunnel)
+            if tunnel:
+                self.tunnels.append(tunnel)
             return tunnel
         except Exception as e:
             self.__s__(e, level=logging.ERROR, exc_info=True)
             return False
 
-    def create_tunnel_subprocess(self, port=None, **kwargs):
+    def create_tunnel_subprocess(self):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
         port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
         self.__s__('trying open port {}'.format(port),level=logging.INFO)
@@ -343,30 +375,37 @@ class SSHClient(object):
         args.append('-C2qTnN')
         args.extend(['-L', '{}:localhost:5901'.format(port)])
         args.extend(self.__base_opt__())
-        
-        proc = subprocess.Popen(args)
+        print(args)
+        proc = psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        self.tunnel_proc.append(proc)
         return proc
 
-
     def __base_opt__(self):
-        args = ['-o', "CheckHostIP=no",
-                '-o', "ServerAliveInterval=60",
-                '-o', "TCPKeepAlive=true",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "StrictHostKeyChecking=no"
-        ]
+        args = COMMON_SSH_OPTS.copy()
         if self.config.get('key_filename'):
             args.extend(['-i', self.config['key_filename']])
-        args.append('{}@{}'.format(self.config['username'], self.config['hostname']))
+        args.append(self.__hostaddress__())
         return args
 
-    def exec_command_by_subprocess(self, command):
+    def __base_opt_scp__(self):
+        args = COMMON_SSH_OPTS.copy()
+        if self.config.get('key_filename'):
+            args.extend(['-i', self.config['key_filename']])
+        return args
+
+    def __hostaddress__(self):
+        return '{}@{}'.format(self.config['username'], self.config['hostname'])
+
+
+    def exec_command_subprocess(self, command, log=True, **kwargs):
+        if log:
+            self.__s__("excuting {}".format(s), level=logging.INFO)
         args = [CMD]
         args.extend(self.__base_opt__())
         args.append(command)
-        # subprocess.Popen(args, creationflags = subprocess.CREATE_NEW_CONSOLE )
-        proc = subprocess.call(args, stdout=subprocess.STDOUT, stderr=subprocess.STDOUT) 
-        return proc
+        # returncode = subprocess.call(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        returncode = subprocess.call(args, **kwargs) # creationflags=subprocess.CREATE_NEW_CONSOLE)
+        return returncode
 
 
     def exec_command(self, command):
@@ -401,10 +440,8 @@ class SSHClient(object):
 
     def invoke_shell(self):
         args = OPEN_SSH_IN_TERMINAL.copy()
-        if self.config.get("key_filename"):
-            args.extend(["-i", self.config.get("key_filename")])
-        args.append("{}@{}".format(self.config.get("username"), self.config.get("hostname")))
-        subprocess.Popen(args, creationflags = subprocess.CREATE_NEW_CONSOLE )
+        args.extend(self.__base_opt__())
+        psutil.Popen(args, creationflags = subprocess.CREATE_NEW_CONSOLE )
 
     def exec_file(self, file):
         self.upload(file, remote_path='~/.cache')
@@ -419,11 +456,17 @@ class SSHClient(object):
                 if t.is_alive and t.get('remote_bind_address') == remote_bind_address:
                     ts.append(t)
 
+        for t in self.tunnel_proc:
+            if t.is_running():
+                ts.append(d)
+
         if ts:
             self.__s__("Found running tunnel", level=logging.INFO)
         if not ts:
-            _  = self.create_tunnel(remote_bind_address=remote_bind_address)
-            if _: ts.append(_)
+            # _  = self.create_tunnel(remote_bind_address=remote_bind_address)
+            _  = self.create_tunnel_subprocess()
+            if _:
+                ts.append(_)
         return ts
 
 
@@ -431,10 +474,12 @@ class SSHClient(object):
         try:
             self.create_vncserver(1)
             ts = self.__get_vnctunnel__()
-            if not ts: 
-                return False
-            subprocess.call([VNCVIEWER, ts[0].local_bind_address_str()])
-            ts[0].stop()
+            if not ts: return False
+            psutil.call([VNCVIEWER, ts[0].local_bind_address_str()])
+            try:
+                ts[0].stop()
+            except:
+                ts[0].terminate()
 
         except FileNotFoundError:
             self.__s__('vncviewer not found', level=logging.ERROR)# , exc_info=True)
@@ -447,7 +492,7 @@ class SSHClient(object):
             self.__s__('close update_vncthumnail',level=logging.INFO)
         if self.vncthumb:
             # self.vncsnapshot()
-            self.vncscreenshot()
+            self.vncscreenshot_subprocess()
             # time.sleep(self.delay)
 
     def vncsnapshot(self):
@@ -484,6 +529,19 @@ class SSHClient(object):
 
         time.sleep(2)
         self.download(remote_path='~/screenshot_1-thumb.jpg', local_path=local_path)
+
+        if os.path.isfile(local_path):
+            self.status['icon'] = local_path
+        else: self.__delete_icon__()
+
+    def vncscreenshot_subprocess(self):
+        local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
+        command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', log=False)[0]
+        if command != 0:
+            try: os.remove(local_path)
+            except: pass
+            return self.__delete_icon__()
+        self.download_by_subprocess(src_path='~/screenshot_1-thumb.jpg', dst_path=local_path)
 
         if os.path.isfile(local_path):
             self.status['icon'] = local_path
