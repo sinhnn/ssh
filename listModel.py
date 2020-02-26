@@ -149,6 +149,9 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.initUI()
         self.threadpool = QtCore.QThreadPool()
 
+        self.vncviewer_threads = QtCore.QThreadPool()
+        self.terminal_threads = QtCore.QThreadPool()
+
         # self._update_timer  = QtCore.QTimer()
         # self._update_timer.start(1000)
         # self._update_timer.timeout.connect(self.viewport().update)
@@ -237,12 +240,12 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def open_vncviewer(self):
         for item in self.selectedItems():
             worker = Worker(item.open_vncviewer)
-            self.threadpool.start(worker)
+            self.vncviewer_threads.start(worker)
 
     def open_terminal(self):
         for item in self.selectedItems():
             worker = Worker(item.invoke_shell)
-            self.threadpool.start(worker)
+            self.terminal_threads.start(worker)
 
     def upload(self):
         dialog = SCPDialog(download=False)
