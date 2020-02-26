@@ -161,6 +161,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.actions = {
             'open' : self.open_vncviewer,
             'open_terminal' : self.open_terminal,
+            'F5' : lambda : self._exec_command('DISPLAY=:1 xdotool key F5'),
             'new' : self.new_item,
             'edit' : self.open_file,
             'upload' : self.upload,
@@ -220,6 +221,12 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
     def selectedItems(self):
         return [self.model().itemAtRow(i.row()) for i in self.selectedIndexes()]
+
+    def _exec_command(self, command):
+        for item in self.selectedItems():
+            worker = Worker(item.exec_command, command)
+            self.threadpool.start(worker)
+
 
     def exec_command(self):
         dialog = ChooseCommandDialog(parent=self)
