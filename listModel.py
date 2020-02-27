@@ -18,7 +18,7 @@ class ListModel(QtCore.QAbstractListModel):
 
         self.delay = 2
         self.threadpool = QtCore.QThreadPool()
-        # self.threadpool.setMaxThreadCount(100)
+        self.threadpool.setMaxThreadCount(100)
         uworker = Worker(self.force_update)
         self.threadpool.start(Worker(self.force_update))
         self.threads = []

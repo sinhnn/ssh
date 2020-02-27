@@ -306,7 +306,8 @@ class SSHClient(object):
             args.append(src_path)
         args.append(dst_path)
         self.__s__(args, level=logging.INFO)
-        returncode = subprocess.Popen(args, **kwargs)
+        returncode = subprocess.call(args, **kwargs) # cause of laggy
+        # returncode = subprocess.Popen(args, **kwargs) # error when sync
         if returncode != 0:
             self.__s__("unable to copy {} to {}".format(src_path, dst_path), level=logging.ERROR)
         return returncode
@@ -318,13 +319,13 @@ class SSHClient(object):
     def __hostaddress_path__(self, path):
         return '{}:{}'.format(self.__hostaddress__(), path)
 
-    def download_by_subprocess(self, src_path, dst_path, recursive=False):
+    def download_by_subprocess(self, src_path, dst_path, recursive=False, **kwargs):
         if isinstance(src_path, list):
             p = [self.__hostaddress_path__(p) for p in src_path]
         else:
             p = self.__hostaddress_path__(src_path)
 
-        return self.scp_by_subprocess(p, dst_path, recursive)
+        return self.scp_by_subprocess(p, dst_path, recursive, **kwargs)
 
 
     def connect(self, client=None, tries=2):
@@ -565,7 +566,12 @@ class SSHClient(object):
             return self.__delete_icon__()
         time.sleep(1)
 
-        self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path)
+        returncode = self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path, stdout=subprocess.DEVNULL)
+        print("returncode = {}".format(returncode))
+        # if returncode != 0:
+        #     try: os.remove(local_path)
+        #     except Exception as e:
+        #         self.__s__(e, level=logging.ERROR, exc_info=True)
 
         if os.path.isfile(local_path):
             self.status['icon'] = local_path
