@@ -416,7 +416,7 @@ class SSHClient(object):
         args.append(command)
         # self.__s__('excuting {}'.format(args))
         returncode = subprocess.call(args, **kwargs)
-        proc.wait()
+        # proc.wait()
         return returncode
 
 
