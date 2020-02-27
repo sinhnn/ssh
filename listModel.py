@@ -173,6 +173,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'download' : self.download,
             'command' : self.exec_command, # from file or command
             'copy_hostaddress' : self.copy_hostaddress, # from file or command
+            'open_log' : self.open_log, # from file or command
         }
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
@@ -274,6 +275,11 @@ class ThumbnailListViewer(QtWidgets.QListView):
         clipboard = QtWidgets.QApplication.clipboard()
         clipboard.clear(mode=clipboard.Clipboard )
         clipboard.setText("\n".join(t), mode=clipboard.Clipboard)
+
+    def open_log(self):
+        for item in self.selectedItems():
+            worker = Worker(os.start, item.logFile)
+            self.terminal_threads.start(worker)
 
 
     def upload(self):
