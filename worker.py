@@ -32,6 +32,7 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
+        self.setAutoDelete(True)
 
         # Add the callback to our kwargs
         # self.kwargs['progress_callback'] = self.signals.progress
