@@ -36,6 +36,7 @@ else:
     sys.exit(1)
 
 COMMON_SSH_OPTS = [
+    '-o', "ConnectTimeout=5",
     '-o', "CheckHostIP=no",
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
@@ -420,8 +421,7 @@ class SSHClient(object):
 
 
     def exec_command(self, command, log=True):
-        if log:
-            self.__s__('executing {}'.format(command), level=logging.INFO)
+        self.__s__('executing {}'.format(command), level=logging.INFO)
         client = self.connect()
         if not client: return (False, [], [])
 
@@ -445,6 +445,7 @@ class SSHClient(object):
                 self.__s__(e, level=logging.ERROR)
                 return (False, [], [])
         r_out, r_err = stdout.readlines(), stderr.readlines()
+        self.__s__('{}\n\n{}'.format(r_out, r_err), level=logging.INFO)
         client.close()
         return (command, r_out, r_err)
 
@@ -550,20 +551,19 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        # command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', stdout=subprocess.DEVNULL)
-        # if command != 0:
-        #     try: os.remove(local_path)
-        #     except Exception as e:
-        #         self.__s__(e, level=logging.ERROR, exc_info=True)
-        #         pass
-        #     return self.__delete_icon__()
-
-
-        command = self.exec_command(SCREENSHOT_CMD, log=False)
-        if command == False or command == None:
+        command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', stdout=subprocess.DEVNULL)
+        if command != 0:
             try: os.remove(local_path)
-            except: pass
+            except Exception as e:
+                self.__s__(e, level=logging.ERROR, exc_info=True)
+                pass
             return self.__delete_icon__()
+
+        # command = self.exec_command(SCREENSHOT_CMD, log=False)
+        # if command == False or command == None:
+        #     try: os.remove(local_path)
+        #     except: pass
+        #     return self.__delete_icon__()
         time.sleep(1)
 
         returncode = self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path, stdout=subprocess.DEVNULL)
