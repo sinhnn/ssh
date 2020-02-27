@@ -278,7 +278,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
     def open_log(self):
         for item in self.selectedItems():
-            worker = Worker(os.start, item.logFile)
+            worker = Worker(os.startfile, item.logFile)
             self.terminal_threads.start(worker)
 
 
