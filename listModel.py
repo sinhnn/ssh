@@ -245,6 +245,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         dialog = ChooseCommandDialog(parent=self)
         r = dialog.getResult()
         if not r: return
+        logging.info("try to send command {}".format(r))
         for item in self.selectedItems():
             worker = Worker(item.exec_command, r)
             self.threadpool.start(worker)
