@@ -172,6 +172,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'upload' : self.upload,
             'download' : self.download,
             'command' : self.exec_command, # from file or command
+            'copy_hostaddress' : self.copy_hostaddress, # from file or command
         }
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
@@ -265,6 +266,14 @@ class ThumbnailListViewer(QtWidgets.QListView):
         for item in self.selectedItems():
             worker = Worker(item.invoke_shell)
             self.terminal_threads.start(worker)
+
+
+    def copy_hostaddress(self):
+        t = ["{}@{}".format(i.get('username'), i.get("hostname")) for i in self.selectedItems()]
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.clear(mode=clipboard.Clipboard )
+        clipboard.setText("\n".join(t), mode=clipboard.Clipboard)
+
 
     def upload(self):
         dialog = SCPDialog(download=False)
