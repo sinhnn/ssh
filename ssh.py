@@ -156,7 +156,8 @@ class SSHClient(object):
     def initLogger(self):
         try:
             self.logger = logging.getLogger('SSHClient_{}'.format(self.id))
-            self.logFile = os.path.join(__CACHE__, '{}.txt'.format(self.get('hostname')))
+            logFile = os.path.join(__CACHE__, '{}.txt'.format(self.get('hostname')))
+            self.logFile = logFile
             if not os.path.isfile(logFile): open(logFile, 'w').write('')
             fileHandler = StoredLoggerHandler(filename=logFile, mode='a', encoding='utf-8', delay=False)
             DEBUG_FORMAT = "%(asctime)s %(levelname)-8s  %(message)s"
