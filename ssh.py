@@ -8,7 +8,7 @@ import cv2
 
 import paramiko
 import sshtunnel
-sshtunnel.SSH_TIMEOUT = 5.0
+sshtunnel.SSH_TIMEOUT = 10.0
 
 from scp import SCPClient, SCPException
 
