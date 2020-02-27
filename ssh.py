@@ -36,7 +36,7 @@ else:
     sys.exit(1)
 
 COMMON_SSH_OPTS = [
-    '-o', "ConnectTimeout=5",
+    '-o', "ConnectTimeout=10",
     '-o', "CheckHostIP=no",
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
@@ -369,8 +369,8 @@ class SSHClient(object):
                 local_bind_address = local_bind_address, \
                 **kwargs
             )
-            # tunnel.start()
-            tunnel.start_by_subprocess()
+            tunnel.start()
+            # tunnel.start_by_subprocess()
             if tunnel:
                 self.tunnels.append(tunnel)
             return tunnel
