@@ -48,6 +48,7 @@ KEEP_ALIVE_SSH_OPTS = [
 
 
 SCREENSHOT_CMD = 'DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg'
+VNCTUNNEL_CMD = "{} "
 
 def intersection(l1, l2):
     tmp = set(l2)
@@ -117,6 +118,7 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
             args.extend(['-D', str(self.get('local_bind_port'))]) 
             
         args.append('{}@{}'.format(self.config['ssh_username'], self.config['ssh_address_or_host'][0]))
+        logging.info("starting new tunnel: {}".format(' '.join(args)))
         if not self.config.get('ssh_pkey'):
             proc = psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
         else:
@@ -381,13 +383,13 @@ class SSHClient(object):
     def create_tunnel_subprocess(self):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
         port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
-        self.__s__('trying open port {}'.format(port),level=logging.INFO)
         args = [CMD]
         args.extend(COMMON_SSH_OPTS)
         args.extend(KEEP_ALIVE_SSH_OPTS)
         args.extend(['-L', '{}:localhost:5901'.format(port)])
         args.extend(self.__base_opt__())
         proc = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        self.__s__("Starting new tunnel: {}".format(' '.join(args)))
         self.tunnel_proc.append(proc)
         return proc
 
@@ -579,6 +581,7 @@ class SSHClient(object):
         else: self.__delete_icon__()
 
 
+    # "-BlacklistTimeout",  "0",
     def create_vncserver(self, x):
         args = ['vncserver',
             '-geometry', '1280x720',
