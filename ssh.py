@@ -181,7 +181,7 @@ class SSHClient(object):
             thread.start()
             self.threads.append(thread)
 
-    def __s__(self, s, level, **kwargs):
+    def __s__(self, s, level=logging.INFO, **kwargs):
         text = '{}@{} {}'.format(self.config.get('username'), self.config.get('hostname'), s)
         if level == logging.INFO:
             logging.info(text, **kwargs)
