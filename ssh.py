@@ -551,19 +551,19 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', stdout=subprocess.DEVNULL)
-        if command != 0:
-            try: os.remove(local_path)
-            except Exception as e:
-                self.__s__(e, level=logging.ERROR, exc_info=True)
-                pass
-            return self.__delete_icon__()
-
-        # command = self.exec_command(SCREENSHOT_CMD, log=False)
-        # if command == False or command == None:
+        # command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', stdout=subprocess.DEVNULL)
+        # if command != 0:
         #     try: os.remove(local_path)
-        #     except: pass
+        #     except Exception as e:
+        #         self.__s__(e, level=logging.ERROR, exc_info=True)
+        #         pass
         #     return self.__delete_icon__()
+
+        command = self.exec_command(SCREENSHOT_CMD, log=False)
+        if command == False or command == None:
+            try: os.remove(local_path)
+            except: pass
+            return self.__delete_icon__()
         time.sleep(1)
 
         returncode = self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path, stdout=subprocess.DEVNULL)
