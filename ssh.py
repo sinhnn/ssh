@@ -414,7 +414,7 @@ class SSHClient(object):
         args.append('-f')
         args.extend(self.__base_opt__())
         args.append(command)
-        # self.__s__('excuting {}'.format(args))
+        self.__s__('excuting {}'.format(args))
         returncode = subprocess.call(args, **kwargs)
         # proc.wait()
         return returncode
