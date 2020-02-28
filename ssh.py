@@ -511,7 +511,7 @@ class SSHClient(object):
     def __is_command_in_runnning_list__(self, command):
         for c in self.exec_command_list:
             if command == c[1]:
-                self.log("{} is duplicated")
+                self.log("paramiko: ignore run {}, because of is duplicated".format(command))
                 return True
         return False
 

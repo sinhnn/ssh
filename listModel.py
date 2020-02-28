@@ -154,6 +154,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setDragEnabled(False)
         self.initUI()
         self.threadpool = QtCore.QThreadPool()
+        self.threadpool.setMaxThreadCount(100)
 
         self.vncviewer_threads = QtCore.QThreadPool()
         self.terminal_threads = QtCore.QThreadPool()
@@ -249,8 +250,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
         dialog = ChooseCommandDialog(parent=self)
         r = dialog.getResult()
         if not r: return
-        logging.info("try to send command {}".format(r))
         for item in self.selectedItems():
+            logging.info("try to send command {} to {}".format(r, str(item)))
             worker = Worker(item.exec_command, r)
             self.threadpool.start(worker)
 
