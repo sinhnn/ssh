@@ -19,6 +19,7 @@ class ListModel(QtCore.QAbstractListModel):
         self.delay = 2
         self.threadpool = QtCore.QThreadPool()
         self.threadpool.setMaxThreadCount(100)
+        self.threadpool.waitForDone(-1)
         uworker = Worker(self.force_update)
         self.threadpool.start(Worker(self.force_update))
         self.threads = []
@@ -50,14 +51,15 @@ class ListModel(QtCore.QAbstractListModel):
 
     def force_update(self):
         while True:
+            if common.close_all:
+                logging.info("Recieved close signal")
+                time.sleep(1)
+                break
+
             for row in range(self.rowCount()):
                 worker = Worker(self.force_update_item, row)
                 self.threadpool.start(worker)
 
-            if common.close_all:
-                logging.info("Receviced close all signal")
-                for t in self.threads: t.join()
-                break
             time.sleep(self.delay)
 
     def index(self, row, column=0, parent=QtCore.QModelIndex()):
@@ -173,6 +175,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'download' : self.download,
             'command' : self.exec_command, # from file or command
             'copy_hostaddress' : self.copy_hostaddress, # from file or command
+            'force_reconnect' : self.force_reconnect, # from file or command
             'open_log' : self.open_log, # from file or command
         }
         for k, v in self.actions.items():
@@ -276,6 +279,10 @@ class ThumbnailListViewer(QtWidgets.QListView):
         clipboard.clear(mode=clipboard.Clipboard )
         clipboard.setText("\n".join(t), mode=clipboard.Clipboard)
 
+    def force_reconnect(self):
+        for item in self.selectedItems():
+            item.force_reconnect()
+
     def open_log(self):
         for item in self.selectedItems():
             worker = Worker(os.startfile, item.logFile)
@@ -306,7 +313,6 @@ class ThumbnailListViewer(QtWidgets.QListView):
                         dst_path=info['dst_path'])
 
             self.threadpool.start(worker)
-
 
 
     def open(self):
