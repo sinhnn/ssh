@@ -218,9 +218,9 @@ if __name__ == '__main__':
     # logging.basicConfig(level=logging.INFO, format=DEBUG_FORMAT)
     fileHandler = logging.FileHandler('log.txt', mode='a', encoding=None, delay=False)
     fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
-    fileHandler.setLevel(logging.DEBUG)
+    fileHandler.setLevel(logging.INFO)
     logging.getLogger().addHandler(fileHandler)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     logging.getLogger().propagate = True
     argv = sys.argv
     app = QApplication(argv)

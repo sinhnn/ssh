@@ -41,18 +41,30 @@ COMMON_SSH_OPTS = [
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
 ]
+
 KEEP_ALIVE_SSH_OPTS = [
     '-o', "ServerAliveInterval=60",
     '-o', "TCPKeepAlive=true"
 ]
 
 
-SCREENSHOT_CMD = 'DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg'
+SCREENSHOT_CMD = 'DISPLAY=:1 scrot -z --thumb 20 ~/screenshot_1.jpg'
 VNCTUNNEL_CMD = "{} "
+
+CHECK_VNCSERVER_CMD = '[[ $(vncserver -list | grep "^:1\s\+[0-9]\+$")  ]] && echo "vnc"'
+START_VNCSERVER_CMD = 'vncserver -geometry  1280x720 --I-KNOW-THIS-IS-INSECURE  -securitytypes  TLSNone,X509None,None -localhost yes -alwaysshared :1' 
+RUN_VNCSERVER_IF_NEED =  "{} || {}".format(CHECK_VNCSERVER_CMD, START_VNCSERVER_CMD)
 
 def intersection(l1, l2):
     tmp = set(l2)
     return [v for v in l1 if v in tmp]
+
+def delete_file(path):
+    try:
+        os.remove(path)
+    except Exception as e:
+        logging.error(e, exc_info=True)
+
 
 import collections
 class StoredLoggerHandler(logging.FileHandler):
@@ -184,7 +196,7 @@ class SSHClient(object):
             thread.start()
             self.threads.append(thread)
 
-    def __s__(self, s, level=logging.INFO, **kwargs):
+    def log(self, s, level=logging.INFO, **kwargs):
         text = '{}@{} {}'.format(self.config.get('username'), self.config.get('hostname'), s)
         if level == logging.INFO:
             logging.info(text, **kwargs)
@@ -215,7 +227,7 @@ class SSHClient(object):
 
     def update(self, k, v):
         if k in self.status.keys():
-            self.__s__('{} is readonly', level=logging.ERROR)
+            self.log('{} is readonly', level=logging.ERROR)
             return
         self.config[k] = v
 
@@ -223,13 +235,13 @@ class SSHClient(object):
     def is_valid(self):
         for r in SSHClient.__REQUIRED__:
             if r not in self.config.keys() and self.config.get(r, '') == '':
-                self.__s__('must has {}'.format(r), level=logging.ERROR)
+                self.log('must has {}'.format(r), level=logging.ERROR)
                 return False
 
         k  = self.config.keys()
         for ones in SSHClient.__ANY__:
             if not len(intersection(ones, k)):
-                self.__s__('required one parameter in {}'.format(ones), level=logging.ERROR)
+                self.log('required one parameter in {}'.format(ones), level=logging.ERROR)
                 return False
         return True
 
@@ -239,7 +251,7 @@ class SSHClient(object):
             return True
 
     def __del__(self):
-        self.__s__('closing ssh client', level=logging.ERROR)
+        self.log('closing ssh client', level=logging.ERROR)
         for t in self.tunnels:
             t.stop()
         for p in self.processes:
@@ -256,7 +268,7 @@ class SSHClient(object):
 
 
     def upload(self, files, remote_path):
-        self.__s__('upload {} to {}'.format(files, remote_path), level=logging.INFO)
+        self.log('upload {} to {}'.format(files, remote_path), level=logging.INFO)
         results = {'done': [], 'failed' : []}
         try:
             client = self.connect()
@@ -268,11 +280,11 @@ class SSHClient(object):
                     results['done'].append(f)
                 except SCPException as error:
                     results['failed'].append(f)
-                    self.__s__(error, level=logging.ERROR, exc_info=True)
+                    self.log(error, level=logging.ERROR, exc_info=True)
             scp.close()
             client.close()
         except SCPException as error:
-            self.__s__(error, level=logging.ERROR, exc_info=True)
+            self.log(error, level=logging.ERROR, exc_info=True)
         finally:
             return results
 
@@ -287,14 +299,14 @@ class SSHClient(object):
                 results['done'].append(local_path)
             except SCPException as error:
                 results['failed'].append(local_path)
-                self.__s__(error, level=logging.ERROR)
+                self.log(error, level=logging.ERROR)
             except Exception as error:
                 results['failed'].append(local_path)
-                self.__s__(error, level=logging.ERROR, exc_info=True)
+                self.log(error, level=logging.ERROR, exc_info=True)
             scp.close()
             client.close()
         except Exception as error:
-            self.__s__(error, level=logging.ERROR, exc_info=True)
+            self.log(error, level=logging.ERROR, exc_info=True)
         # finally:
             # print(results)
         return results
@@ -309,11 +321,11 @@ class SSHClient(object):
         else:
             args.append(src_path)
         args.append(dst_path)
-        self.__s__(args, level=logging.INFO)
+        self.log(args, level=logging.INFO)
         returncode = subprocess.call(args, **kwargs) # cause of laggy
         # returncode = subprocess.Popen(args, **kwargs) # error when sync
         if returncode != 0:
-            self.__s__("unable to copy {} to {}".format(src_path, dst_path), level=logging.ERROR)
+            self.log("unable to copy {} to {}".format(src_path, dst_path), level=logging.ERROR)
         return returncode
 
     def upload_by_subprocess(self, src_path, dst_path, recursive=False):
@@ -336,7 +348,7 @@ class SSHClient(object):
         if not self.is_valid():
             return False
         if tries <= 0 :
-            self.__s__('unable to connect', level=logging.ERROR)
+            self.log('unable to connect', level=logging.ERROR)
             return False
 
         if client == None:
@@ -353,14 +365,14 @@ class SSHClient(object):
             self.__delete_icon__()
             return self.connect(client=client, tries=tries-1)
         except Exception as e:
-            self.__s__('unable to connect from {} configurations, because of {}'.format(self.config, e), level=logging.ERROR, exc_info=True)
+            self.log('unable to connect from {} configurations, because of {}'.format(self.config, e), level=logging.ERROR, exc_info=True)
             return False
     
     # https://sshtunnel.readthedocs.io/en/latest/
     def create_tunnel(self, port=None, **kwargs):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
         port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
-        self.__s__('trying open port {}'.format(port),level=logging.INFO)
+        self.log('trying open port {}'.format(port),level=logging.INFO)
         try:
             local_bind_address = ('127.0.0.1', port)
             tunnel = SSHTunnelForwarder(
@@ -377,7 +389,7 @@ class SSHClient(object):
                 self.tunnels.append(tunnel)
             return tunnel
         except Exception as e:
-            self.__s__(e, level=logging.ERROR, exc_info=True)
+            self.log(e, level=logging.ERROR, exc_info=True)
             return False
 
     def create_tunnel_subprocess(self):
@@ -389,7 +401,7 @@ class SSHClient(object):
         args.extend(['-L', '{}:localhost:5901'.format(port)])
         args.extend(self.__base_opt__())
         proc = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        self.__s__("Starting new tunnel: {}".format(' '.join(args)))
+        self.log("Starting new tunnel: {}".format(' '.join(args)))
         self.tunnel_proc.append(proc)
         return proc
 
@@ -412,43 +424,43 @@ class SSHClient(object):
 
     #ERROR: hangout when running
     def exec_command_subprocess(self, command, log=True, **kwargs):
-        # if log: self.__s__("excuting {}".format(command), level=logging.INFO)
+        # if log: self.log("excuting {}".format(command), level=logging.INFO)
         args = [CMD]
         args.append('-f')
         args.extend(self.__base_opt__())
         args.append(command)
-        self.__s__('excuting {}'.format(args))
+        self.log('excuting {}'.format(args))
         returncode = subprocess.call(args, **kwargs)
         # proc.wait()
         return returncode
 
 
     def exec_command(self, command, log=True):
-        self.__s__('executing {}'.format(command), level=logging.INFO)
+        self.log('executing {}'.format(command), level=logging.INFO)
         client = self.connect()
         if not client: return (False, [], [])
 
         try:
             stdin, stdout, stderr = client.exec_command(command)
         except Exception as e:
-            self.__s__(e, level=logging.ERROR)
+            self.log(e, level=logging.ERROR)
             return (False, [], [])
 
         while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready():
             try:
                 line = stdout.readlines()
                 if 'password' in ' '.join(line):
+                    self.log("Filling password: {}".format(self.config['password']))
                     stdin.write(self.config['password'] + '\n')
                     stdin.flush()
                 line.extend(stderr.readlines())
                 if not len(line): continue
-                self.__s__("{}\n{}".format(command, '\n'.join(line)), level=logging.INFO)
+                self.log("{}\n{}".format(command, '\n'.join(line)), level=logging.INFO)
                 self.status['progress'] = line
             except Exception as e:
-                self.__s__(e, level=logging.ERROR)
+                self.log(e, level=logging.ERROR)
                 return (False, [], [])
         r_out, r_err = stdout.readlines(), stderr.readlines()
-        self.__s__('{}\n\n{}'.format(r_out, r_err), level=logging.INFO)
         client.close()
         return (command, r_out, r_err)
 
@@ -475,7 +487,7 @@ class SSHClient(object):
         #         ts.append(d)
 
         if ts:
-            self.__s__("Found running tunnel", level=logging.INFO)
+            self.log("Found running tunnel", level=logging.INFO)
         if not ts:
             _  = self.create_tunnel(remote_bind_address=remote_bind_address)
             # _  = self.create_tunnel_subprocess()
@@ -488,29 +500,23 @@ class SSHClient(object):
         try:
             self.create_vncserver(1)
             ts = self.__get_vnctunnel__()
-            if not ts:
-                return False
-            print("Openning vncviewer")
-            subprocess.call([VNCVIEWER, ts[0].local_bind_address_str()])
-            try:
-                ts[0].stop()
-            except:
-                ts[0].terminate()
+            if not ts: return False
+            if ts[0]:
+                self.log("Openning vncviewer")
+                subprocess.call([VNCVIEWER, ts[0].local_bind_address_str()])
+                try:
+                    ts[0].stop()
+                except:
+                    ts[0].terminate()
 
         except FileNotFoundError:
-            self.__s__('vncviewer not found', level=logging.ERROR)# , exc_info=True)
+            self.log('vncviewer not found', level=logging.ERROR)# , exc_info=True)
         except Exception as e:
-            self.__s__(e, level=logging.ERROR, exc_info=True)
+            self.log(e, level=logging.ERROR, exc_info=True)
 
     def update_vncthumnail(self):
-        # while (True):
-        if common.close_all:
-            self.__s__('close update_vncthumnail',level=logging.INFO)
-        if self.vncthumb:
-            # self.vncsnapshot()
-            self.vncscreenshot_subprocess()
-            # self.vncscreenshot()
-            # time.sleep(self.delay)
+        self.vncscreenshot_subprocess()
+        # self.vncscreenshot()
 
     def vncsnapshot(self):
         # vncsnapshot -tunnel only available in Linux
@@ -538,10 +544,7 @@ class SSHClient(object):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
         command = self.exec_command(SCREENSHOT_CMD, log=False)[0]
         if command == False or command == None:
-            try:
-                os.remove(local_path)
-            except:
-                pass
+            delete_file(local_path)
             return self.__delete_icon__()
 
         time.sleep(1)
@@ -554,48 +557,48 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        # command = self.exec_command_subprocess('DISPLAY=:1 scrot --thumb 20 ~/screenshot_1.jpg', stdout=subprocess.DEVNULL)
+        # command = self.exec_command_subprocess(SCREENSHOT_CMD, stdout=subprocess.DEVNULL)
         # if command != 0:
         #     try: os.remove(local_path)
         #     except Exception as e:
-        #         self.__s__(e, level=logging.ERROR, exc_info=True)
+        #         self.log(e, level=logging.ERROR, exc_info=True)
         #         pass
         #     return self.__delete_icon__()
 
         command = self.exec_command(SCREENSHOT_CMD, log=False)
+        # if false start vnc
         if command == False or command == None:
-            try: os.remove(local_path)
-            except: pass
+            delete_file(local_path)
             return self.__delete_icon__()
         time.sleep(1)
 
         returncode = self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path, stdout=subprocess.DEVNULL)
-        print("returncode = {}".format(returncode))
-        # if returncode != 0:
-        #     try: os.remove(local_path)
-        #     except Exception as e:
-        #         self.__s__(e, level=logging.ERROR, exc_info=True)
+        if returncode != 0:
+            delete_file(local_path)
+            self.__delete_icon__()
+            # try: os.remove(local_path)
+            # except Exception as e:
+                # self.log(e, level=logging.ERROR, exc_info=True)
 
-        if os.path.isfile(local_path):
-            self.status['icon'] = local_path
-        else: self.__delete_icon__()
+        self.status['icon'] = local_path
+        # if os.path.isfile(local_path):
+            # self.status['icon'] = local_path
+        # else: self.__delete_icon__()
 
 
     # "-BlacklistTimeout",  "0",
     def create_vncserver(self, x):
-        args = ['vncserver',
-            '-geometry', '1280x720',
-            "--I-KNOW-THIS-IS-INSECURE", "-securitytypes", "TLSNone,X509None,None",
-            "-localhost", "yes",
-            "-alwaysshared",
-            ':{}'.format(x)
-        ]
-        command = ' '.join(args)
+        # for s in self.vncserver_list():
+        #     if s[0] == 1:
+        #         self.log('{} already running')
+        #         return True
+        command = RUN_VNCSERVER_IF_NEED.copy()
         (c, out, err) = self.exec_command(command, log=False)
         return c
 
 
     def vncserver_list(self):
+        ''' Get list of vncserver on slaver '''
         def parser(line):
             matched = re.match(r':(?P<display>[1-9])\s+(?P<pid>[0-9]+)$')
             if not matched:

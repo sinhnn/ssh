@@ -37,14 +37,14 @@ class ListModel(QtCore.QAbstractListModel):
             topLeft = self.createIndex(row, 0)
             item = self.__data__[row]
             if item not in self.__updating_item__:
-                logging.info('updating thumbnail of {}'.format(str(item).strip()))
+                logging.debug('updating thumbnail of {}'.format(item.get('hostname')))
                 self.__updating_item__.append(item)
                 item.update_vncthumnail()
                 self.dataChanged.emit(topLeft, topLeft, [QtCore.Qt.DecorationRole | QtCore.Qt.DisplayRole ])
                 self.fupate.emit(topLeft)
                 self.__updating_item__.remove(item)
             else:
-                logging.info('updating thumbnail of {} has already in queue'.format(str(item).strip()))
+                logging.debug('updating thumbnail of {} has already in queue'.format(item.get('hostname')))
         except Exception as e:
             logging.error(e, exc_info=True)
 
