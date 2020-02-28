@@ -119,13 +119,12 @@ def load_ssh_file(path):
         fp = open(path, 'r')
         info = json.load(fp)
         fp.close()
-
-        client = ssh.SSHClient(info=info)
-        if client.is_valid(): return client
+        client = ssh.SSHClient(info=info, fileConfig=path)
+        if client.is_valid():
+            return client
         return {}
     except Exception as e:
-        logging.error('unable to load ssh file {}\n{}'.format(path),
-                exc_info=True)
+        logging.error('unable to load ssh file {}\n{}'.format(path), exc_info=True)
         return {}
     # return None
 
