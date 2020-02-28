@@ -358,7 +358,7 @@ class SSHClient(object):
 
         for proc in self.processes:
             if proc.is_running() and args == proc.cmdline():
-                self.log("Ignore running {} because of dublicated".format(args))
+                self.log("Ignore running {} because of duplicated".format(args))
                 return True
 
         if not kwargs.get('stdout'):
@@ -508,10 +508,19 @@ class SSHClient(object):
         # proc.wait()
         return returncode
 
+    def __is_command_in_runnning_list__(self, command):
+        for c in self.exec_command_list:
+            if command == c[1]:
+                self.log("{} is duplicated")
+                return True
+        return False
 
     def exec_command(self, command, log=True):
         if self.__failedConnect__ >= SSHClient.MAX_FAILED_CONNECTED:
             self.log("disabled because of many connection failures")
+            return (False, [], [])
+
+        if self.__is_command_in_runnning_list__(command):
             return (False, [], [])
 
         cid = self.exec_command_cid
