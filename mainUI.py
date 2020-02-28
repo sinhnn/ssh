@@ -1,4 +1,4 @@
-import sys,traceback,os
+import sys,traceback,os, time
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QWidget
@@ -87,9 +87,9 @@ class MainFrame(QtWidgets.QMainWindow):
         self.table.setWindowTitle('SSH Table')
         self.setCentralWidget(mWidgets);
 
-        self.exitAction = QtWidgets.QAction('Exit', self)
-        self.exitAction.setShortcut('Ctrl+Q')
-        self.exitAction.triggered.connect(self.on_exit)
+        # self.exitAction = QtWidgets.QAction('Exit', self)
+        # self.exitAction.setShortcut('Ctrl+Q')
+        # self.exitAction.triggered.connect(self.on_exit)
 
         self.loadAction = QtWidgets.QAction('Load Directory', self)
         self.loadAction.triggered.connect(self.loadDir)
@@ -129,13 +129,24 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(self.loadAction)
         fileMenu.addSeparator();
-        fileMenu.addAction(self.exitAction)
+        # fileMenu.addAction(self.exitAction)
 
         self.setWindowTitle("....")
 
     def on_exit(self):
         common.close_all = True
         QApplication.quit()
+
+    def closeEvent(self, event):
+        common.close_all = True
+        quit_msg = "Are you sure you want to exit the program?"
+        reply = QtWidgets.QMessageBox.question(self, 'Message', quit_msg,
+                QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
 
     def on_scale(self, value):
         self._widgets.scaleIcon(float(value/100.0))
