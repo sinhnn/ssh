@@ -11,10 +11,11 @@ from sshDialogForm import SSHInputDialog, SCPDialog
 class ListModel(QtCore.QAbstractListModel):
     """Docstring for ListModel. """
     fupate = QtCore.pyqtSignal(QtCore.QModelIndex)
-    def __init__(self, data=[], parent=None, **kwargs):
+    def __init__(self, data=[], auto_update=True, parent=None, **kwargs):
         QtCore.QAbstractListModel.__init__(self, parent, **kwargs)
         self.parent = parent
         self.__data__ = data
+        self.__auto_update__ = auto_update
 
         self.delay = 2
         self.threadpool = QtCore.QThreadPool()
@@ -32,6 +33,9 @@ class ListModel(QtCore.QAbstractListModel):
             thread.daemon = True
             thread.start()
             self.threads.append(thread)
+
+    def setAutoUpdate(self, enable):
+        self.__auto_update__ = enable
 
     def force_update_item(self, row):
         try:
@@ -55,10 +59,10 @@ class ListModel(QtCore.QAbstractListModel):
                 logging.info("Recieved close signal")
                 time.sleep(1)
                 break
-
-            for row in range(self.rowCount()):
-                worker = Worker(self.force_update_item, row)
-                self.threadpool.start(worker)
+            if self.__auto_update__ == True:
+                for row in range(self.rowCount()):
+                    worker = Worker(self.force_update_item, row)
+                    self.threadpool.start(worker)
 
             time.sleep(self.delay)
 
@@ -79,6 +83,13 @@ class ListModel(QtCore.QAbstractListModel):
     def itemAtRow(self, i):
         return self.__data__[i]
 
+    def removeItem(self, item):
+        row = self.__data__.index(item)
+        self.beginRemoveRows(QtCore.QModelIndex(), row, row)
+        self.__data__.remove(item)
+        self.endRemoveRows()
+
+
     def appendItem(self, item):
         self.beginInsertRows(QtCore.QModelIndex(), self.rowCount() - 1, self.rowCount() - 1)
         self.__data__.append(item)
@@ -88,6 +99,8 @@ class ListModel(QtCore.QAbstractListModel):
     def data(self, index, role = QtCore.Qt.DecorationRole):
         if not index.isValid():
             print("invalid index")
+            return None
+        if index.row() > self.rowCount():
             return None
 
         item = self.__data__[index.row()]
@@ -160,16 +173,16 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.terminal_threads = QtCore.QThreadPool()
         self.setStyleSheet("font-size: 12px;")
 
-        # self._update_timer  = QtCore.QTimer()
-        # self._update_timer.start(1000)
-        # self._update_timer.timeout.connect(self.viewport().update)
-
     def initUI(self):
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
             'open' : self.open_vncviewer,
             'open_terminal' : self.open_terminal,
-            'F5' : lambda : self._exec_command('DISPLAY=:1 xdotool key F5'),
+            'new_url_at_current_tab' : self.new_url_at_current_tab,
+            'Send F5' : lambda : self._exec_command('DISPLAY=:1 xdotool key F5'),
+            'Send Space' : lambda : self._exec_command('DISPLAY=:1 xdotool key space'),
+            'Send Escape' : lambda : self._exec_command('DISPLAY=:1 xdotool key Escape'),
+            'send_key' : self.send_key,
             'new' : self.new_item,
             'edit' : self.open_file,
             'upload' : self.upload,
@@ -177,6 +190,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'command' : self.exec_command, # from file or command
             'copy_hostaddress' : self.copy_hostaddress, # from file or command
             'force_reconnect' : self.force_reconnect, # from file or command
+            'install_sshkey' : self.install_sshkey, # from file or command
+            'delete' : self.move_to_trash, # from file or command
             'open_log' : self.open_log, # from file or command
         }
         for k, v in self.actions.items():
@@ -206,17 +221,12 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def setIconView(self):
         self.setViewMode(QtWidgets.QListView.IconMode)
         self.setFlow(QtWidgets.QListView.LeftToRight)
-        # self.setLayoutMode(QtWidgets.QListView.SinglePass)
         self.setLayoutMode(QtWidgets.QListView.Batched)
         self.setResizeMode(QtWidgets.QListView.Adjust)
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
-        # self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         self.scaleIcon(0.5)
         self.setSpacing(0)
-        # self.setGridSize(ThumbnailListViewer.__DEFAULT_GRID_SIZE__)
-        # self.setIconSize(ThumbnailListViewer.__DEFAULT_ICON_SIZE__)
-        # self.setSpacing(0)
         self.setUniformItemSizes(False)
 
     def setListView(self):
@@ -315,6 +325,35 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
             self.threadpool.start(worker)
 
+    def new_url_at_current_tab(self):
+        text, okPressed = QtWidgets.QInputDialog.getText(self, "URL", "URL", QtWidgets.QLineEdit.Normal, "")
+        url = text.strip()
+        if okPressed and url:
+            cmd = '{0} key "ctrl+l" && {0} type --delay 100 "{1}" && {0} key Return'.format("DISPLAY=:1 xdotool", url)
+            for item in self.selectedItems():
+                worker = Worker(item.exec_command, cmd)
+                self.threadpool.start(worker)
+
+
+    def install_sshkey(self):
+        text, okPressed = QtWidgets.QInputDialog.getText(self, "Install SSH Key", "SSHKEY", QtWidgets.QLineEdit.Normal, "")
+        key = text.strip()
+        if okPressed and key:
+            cmd = '[[ -f {0} ]] || mkdir -p ~/.ssh && touch {0} && echo "{1}" >> {0}'.format('~/.ssh/authorized_keys', key)
+            for item in self.selectedItems():
+                worker = Worker(item.exec_command, cmd)
+                self.threadpool.start(worker)
+
+
+
+    def send_key(self):
+        items = ("Escape", "F5", "space", "Return", "f", "ctrl+w", "ctrl+q")
+        item, okPressed = QtWidgets.QInputDialog.getItem(self, "Send key","Key", items, 0, False)
+        if okPressed and item:
+            cmd = '{} key {}'.format("DISPLAY=:1 xdotool", item)
+            for item in self.selectedItems():
+                worker = Worker(item.exec_command, cmd)
+                self.threadpool.start(worker)
 
     def open(self):
         self.open_vncviewer()
@@ -322,6 +361,78 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def close(self):
         for item in self.selectedItems():
             item.close()
+
+    def move_to_trash(self):
+        for item in self.selectedItems():
+            dirname = os.path.join(os.path.dirname(item.get('filepath')), 'Trash')
+            os.makedirs(dirname, exist_ok=True)
+            newfile = os.path.join(dirname, os.path.basename(item.get('filepath')))
+            try:
+                os.rename(item.get('filepath'), newfile)
+            except Exception as e:
+                logging.error(e, exc_info=True)
+            try:
+                self.model().removeItem(item)
+            except Exception as e:
+                logging.error(e, exc_info=True)
+
+# class DirectoryListModel(QtCore.QAbstractListModel):
+#     def __init__(self):
+#         QtCore.QAbstractListModel.__init__(self)
+# 
+# 
+# class GroupThumbnailListViewer(QtWidgets.QListView):
+#     def __init__(self, dir, parent=None, **kwargs):
+#         """TODO: to be defined. """
+#         QtWidgets.QtWidgets.__init__(self, parent, **kwargs)
+#         self.root_dir = dir
+# 
+#         self.guidict = {
+#             "layout": QtWidgets.QHBoxLayout(),
+#             "grouplist": QtWidgets.QtWidgets.QListView(self),
+#             "thumnailview": ThumbnailListViewer(self)
+#         }
+# 
+#     def initUI(self):
+#         layout = self.guidict["layout"]
+# 
+#         self.initGroupList()
+#         self.guidict["grouplist"].setFixeWidth(200)
+#         self.guidict["grouplist"].doubleClicked.connect(self.switchModel)
+#         layout.addWidget(self.guidict['grouplist'])
+# 
+#         layout.addWidget(self.guidict['thumnailview'])
+#         self.initThumbnailView()
+# 
+# 
+#     def initModels(self):
+#         for entry in os.scandir(self.root_dir):
+#             if entry.is_dir():
+#                 m = ListModel(load_ssh_dir(entry.path), parent=self)
+#                 self.models.append(m)
+# 
+# 
+#     def selectedItems(self):
+#         # return [self.model().itemAtRow(i.row()) for i in self.selectedIndexes()][0]
+#         model = self.guidict['grouplist'].model()
+#         return model().itemAtRow(i.row()) for i in self.selectedIndexes()
+# 
+# 
+#     def switchModel(self, index):
+#         self.current_model.setAutoUpdate(False)
+#         self.current_model = self.models[index]
+#         self.current_model.setAutoUpdate(True)
+#         self.listview.setModel(self.current_model)
+# 
+#     def initGroupList(self):
+#         self.initModels()
+# 
+#     def initThumbnailView(self):
+#         self.current_model = self.models[0]
+#         self.current_model.setAutoUpdate(True)
+#         self.listview = ThumbnailListViewer(parent=self)
+#         self.listview.setModel(self.current_model)
+
 
 
 def main(): 

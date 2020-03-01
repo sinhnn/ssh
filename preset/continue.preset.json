@@ -1,0 +1,4 @@
+{
+	"name" : "Continue Playing when Youtube Ask",
+	"value"  : "DISPLAY=:1 xdotool key Escape"
+}

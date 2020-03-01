@@ -1,0 +1,4 @@
+{
+	"name" : "Update ytv",
+	"value"  : "wget 'https://drive.google.com/uc?export=download&id=1mCa-Desh8GVTtJ3UjKw8q4KRfzOK17dW' -O ytv.tar && tar -xf ytv.tar && DISPLAY=:1 ytv/ytv data.bin"
+}

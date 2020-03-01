@@ -1,4 +1,4 @@
 {
 	"name" : "Start VNC server",
-	"value"  : "vncserver -geometry 1280x720 --I-KNOW-THIS-IS-INSECURE -securitytypes TLSNone,X509None,None -localhost yes -alwaysshared :1"
+	"value"  : "vncserver -geometry 1280x720 --I-KNOW-THIS-IS-INSECURE -securitytypes TLSNone,X509None,None -localhost yes -blacklisttimeout 0 -alwaysshared :1"
 }

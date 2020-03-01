@@ -21,7 +21,7 @@ os.makedirs(__CACHE__, exist_ok=True)
 if platform.system() == "Windows":
     CMD = r'C:\Windows\System32\OpenSSH\ssh.exe' 
     SCP = r'C:\Windows\System32\OpenSSH\scp.exe' 
-    VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
+    VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer' # Too many security failures after five time cannot connect
     VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
     OPEN_SSH_IN_TERMINAL = ["cmd.exe", "/k", "ssh.exe", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"]
 elif platform.system() == "Linux":
@@ -49,9 +49,12 @@ KEEP_ALIVE_SSH_OPTS = [
 SCREENSHOT_CMD = 'DISPLAY=:1 scrot -z --thumb 20 ~/screenshot_1.jpg'
 VNCTUNNEL_CMD = "{} "
 
-CHECK_VNCSERVER_CMD = '[[ $(vncserver -list | grep "^:1\s\+[0-9]\+$") ]]'
-START_VNCSERVER_CMD = 'vncserver -geometry  1280x720 --I-KNOW-THIS-IS-INSECURE  -securitytypes  TLSNone,X509None,None -localhost yes -alwaysshared :1' 
+CHECK_VNCSERVER_CMD = '[[ $(vncserver -list | grep "^:1\s\+[0-9]\+") ]]'
+START_VNCSERVER_CMD = 'vncserver -geometry  1280x720 --I-KNOW-THIS-IS-INSECURE  -securitytypes  TLSNone,X509None,None -localhost yes -blacklisttimeout 0 -alwaysshared :1' 
 RUN_VNCSERVER_IF_NEED =  "{} || {}".format(CHECK_VNCSERVER_CMD, START_VNCSERVER_CMD)
+
+MOBAXTERM_CMD = r'C:\Program Files (x86)\Mobatek\MobaXterm\MobaXterm.exe'
+START_VNC_VIA_MOBAXTER = [MOBAXTERM_CMD, "-exec", "ssh -i C:/Users/sinhnn/Documents/GitHub/ssh/linode/id_rsa root@192.155.93.130 'vncviewer :1'" ]
 
 
 REQUIREMENTS = ["xorg", "xserver-xorg",
@@ -283,11 +286,21 @@ class SSHClient(object):
 
     def force_reconnect(self):
         self.__failedConnect__ = 0
+        self.exec_command_list.clear()
+        self.processes.clear()
+        thread = threading.Thread(target=self.update_vncthumnail)
+        thread.daemon = True
+        thread.start()
+        self.threads.append(thread)
+
+
+        # remove all download thumbnail
 
 
     def __eq__(self, other):
         if self.get('hostname') == other.get('hostname') \
-            and self.get('username') == other.get('username'):
+            and self.get('username') == other.get('username') \
+            and self.id == other.id:
             return True
 
 
@@ -397,7 +410,7 @@ class SSHClient(object):
 
     def upload_by_subprocess(self, src_path, dst_path, recursive=False):
         p = self.__hostaddress_path__(dst_path)
-        self.log('downloading {}'.format(src_path))
+        self.log('uploading {}'.format(src_path))
         return self.scp_by_subprocess(src_path, p, recursive)
 
     def __hostaddress_path__(self, path):
@@ -455,8 +468,9 @@ class SSHClient(object):
                 **kwargs
             )
             tunnel.start()
-            # tunnel.start_by_subprocess()
-            if tunnel: self.tunnels.append(tunnel)
+            time.sleep(1)
+            if tunnel:
+                self.tunnels.append(tunnel)
             return tunnel
         except Exception as e:
             self.log(e, level=logging.ERROR, exc_info=True)
@@ -560,7 +574,11 @@ class SSHClient(object):
                 self.log(e, level=logging.ERROR)
                 return (False, [], [])
         client.close()
-        self.exec_command_list.remove((cid, command))
+        try:
+            self.exec_command_list.remove((cid, command))
+        except Exception as e:
+            self.log(e, exc_info=True)
+
         return (command, r_out, r_err)
 
     def invoke_shell(self):

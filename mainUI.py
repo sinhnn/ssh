@@ -28,6 +28,7 @@ def timedeltaToString(deltaTime):
 from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
+
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
     # signalActive = pyqtSignal()
@@ -37,22 +38,19 @@ class MainFrame(QtWidgets.QMainWindow):
         self.__initalMode = 0
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
-        # self.settings = SettingsModel(self)
         self.initUI()
-        # self._widgets = self.initUI()
         self.centerWindow()
         self.setMinimumSize(1800,1000)
-   
-        # self._update_timer = QtCore.QTimer()
-        # self._update_timer.start(1000)
-        # self._update_timer.timeout.connect(self.repaint)
 
 
     def initUI(self):
         mWidgets = QtWidgets.QWidget()
         mlayout = QtWidgets.QVBoxLayout()
+
         widgets = ThumbnailListViewer(parent=self)
+        self.models  = []
         model = ListModel(load_ssh_dir(self.dir), parent=self)
+        self.models.append(model)
         widgets.setModel(model)
         mlayout.addWidget(widgets)
         mWidgets.setLayout(mlayout)
@@ -103,6 +101,9 @@ class MainFrame(QtWidgets.QMainWindow):
         self.sortByNameAction = QtWidgets.QAction('Sort by Name', self)
         self.sortByNameAction.triggered.connect(self.on_sort_by_name)
 
+        self.sortByStatusAction = QtWidgets.QAction('Sort by Status', self)
+        self.sortByStatusAction.triggered.connect(self.on_sort_by_status)
+
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"),
                 self).activated.connect(lambda : self.search.setFocus())
 
@@ -120,6 +121,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
         self.toolbar.addAction(self.sortByNameAction)
+        self.toolbar.addAction(self.sortByStatusAction)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.sort_by)
         self.toolbar.addWidget(self.sort_order_button)
@@ -131,7 +133,7 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addSeparator();
         fileMenu.addAction(self.exitAction)
 
-        self.setWindowTitle("....")
+        self.setWindowTitle("SSH-VNC {}".format(self.dir))
 
     def on_exit(self):
         common.close_all = True
@@ -151,6 +153,10 @@ class MainFrame(QtWidgets.QMainWindow):
     def on_sort_by_name(self):
         self.sort_order = not self.sort_order
         self._widgets.model().sort(self.sort_order)
+
+    def on_sort_by_status(self):
+        self.sort_order = not self.sort_order
+        self._widgets.model().sort_by("icon", self.sort_order)
 
     def on_sort(self):
         self._widgets.model().sort_by(self.sort_by.text(), self.sort_order)
@@ -213,19 +219,34 @@ class MainFrame(QtWidgets.QMainWindow):
 
 
 if __name__ == '__main__':
+
     DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
-    if os.path.isfile('log.txt'): open('log.txt', 'w').write('')
-    # logging.basicConfig(level=logging.INFO, format=DEBUG_FORMAT)
-    fileHandler = logging.FileHandler('log.txt', mode='a', encoding=None, delay=False)
+    if os.path.isfile('log.txt'):
+        open('log.txt', 'w').write('')
+
+
+    argv = sys.argv
+    app = QApplication(argv)
+    app.setWindowIcon(getAppIcon())
+    
+    logfile = 'log.txt'
+    if len(argv) == 2:
+        logfile = os.path.dirname(argv[1]) + '.' + logfile
+    if os.path.isfile(logfile):
+        open(logfile, 'w').write('')
+
+    fileHandler = logging.FileHandler(logfile, mode='a', encoding=None, delay=False)
     fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
     fileHandler.setLevel(logging.INFO)
     logging.getLogger().addHandler(fileHandler)
     logging.getLogger().setLevel(logging.INFO)
     logging.getLogger().propagate = True
-    argv = sys.argv
-    app = QApplication(argv)
-    app.setWindowIcon(getAppIcon())
-    w = MainFrame()
+
+
+    if len(argv) == 2:
+        w = MainFrame(dir=argv[1])
+    else:
+        w = MainFrame()
     # screenrect = QApplication::desktop().screenGeometry();
     w.move(0,0)
     if os.path.isfile('stylesheet.css'):

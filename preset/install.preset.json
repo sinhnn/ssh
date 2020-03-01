@@ -1,4 +1,4 @@
 {
 	"name" : "Install requirements",
-	"value"  : "apt install -y xorg xserver-xorg openbox obmenu tigervnc* wget curl firefox cifs-utils caja mate-terminal caja-open-terminal ffmpeg scrot xsel xdotool"
+	"value"  : "wget 'https://drive.google.com/uc?export=download&id=1T-pW8W-JmsKX5ivFYDxIq0AixOMYveCz' -O requirements.tar && tar -xf requirements.tar && requirements/requirements"
 }
