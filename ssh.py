@@ -14,56 +14,81 @@ from port import PortScanner
 import common
 import utils
 
-__PATH__ = os.path.dirname(os.path.abspath(__file__))
-__CACHE__ = os.path.join(__PATH__, 'cache')
-os.makedirs(__CACHE__, exist_ok=True)
+__PATH__                  = os.path.dirname(os.path.abspath(__file__))
+__CACHE__                 = os.path.join(__PATH__, 'cache')
+SSHCLIENT_CONFIG_FILE     = os.path.join(__PATH__, 'sshclient.json')
+
+__CONFIGS__ = {}
+if os.path.isfile(SSHCLIENT_CONFIG_FILE):
+    try:
+        fp = open(SSHCLIENT_CONFIG_FILE, 'r')
+        __CONFIGS__ = json.load(fp)
+        fp.close()
+    except Exception as e:
+        logging.error(e, exc_info=True)
+
+
+SSH_MAX_FAILED            = 10
+SSH_REFRESH_CONNECTION    = 200
+SSH_PUBLIC_KEY_FILE       = os.path.join(__PATH__, 'id_rsa.pub')
+SSH_COMMON_OPTS           = [
+                                "-o", "ConnectTimeout=10",
+                                "-o", "CheckHostIP=no",
+                                "-o", "UserKnownHostsFile=/dev/null",
+                                "-o", "StrictHostKeyChecking=no"
+                            ]
+
+SSH_KEEP_ALIVE_OPTS       = [
+                                '-o', "ServerAliveInterval=60",
+                                '-o', "TCPKeepAlive=true"
+                            ]
+
+REMOTE_BIND_ADDRESS       = ('127.0.0.1', '5901')
+
+SCREENSHOT_FILE           = '~/screenshot_1'
+SCREENSHOT_THUMB          = '~/screenshot_1-thumb.jpg'
+CMD_SCREENSHOT            = 'DISPLAY=:1 scrot -z --thumb 20 ~/screenshot_1.jpg'
+CMD_CHECK_VNCSERVER       = '[[ $(vncserver -list | grep "^:1\s\+[0-9]\+") ]]'
+CMD_START_VNCSERVER       = 'vncserver -geometry  1280x720' \
+                                + ' --I-KNOW-THIS-IS-INSECURE' \
+                                + ' -securitytypes  TLSNone,X509None,None' \
+                                + ' -localhost yes' \
+                                + ' -blacklisttimeout 0' \
+                                + ' -alwaysshared :1'
+CMD_RUN_VNCSERVER_IF_NEED = "{} || {}".format(CMD_CHECK_VNCSERVER, CMD_START_VNCSERVER)
+REQUIREMENTS              = [
+                                "xorg", "xserver-xorg",
+                                "openbox", "obmenu",
+                                "tigervnc*", "wget", "curl",
+                                "firefox", "cifs-utils",
+                                "caja", "mate-terminal", "caja-open-terminal",
+                                "ffmpeg", "scrot", "xsel", "xdotool"
+                            ]
+CMD_INSTALL_REQUIREMENT   = 'sudo apt update && pgrep -f "apt\s+install"'  \
+                                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
+
+
+os.makedirs(__CACHE__, exist_ok = True)
 
 if platform.system() == "Windows":
-    CMD = r'C:\Windows\System32\OpenSSH\ssh.exe' 
-    SCP = r'C:\Windows\System32\OpenSSH\scp.exe' 
-    VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer' # Too many security failures after five time cannot connect
-    VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
-    OPEN_SSH_IN_TERMINAL = ["cmd.exe", "/k", "ssh.exe", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"]
+    CMD                   = r'C:\Windows\System32\OpenSSH\ssh.exe'
+    SCP                   = r'C:\Windows\System32\OpenSSH\scp.exe'
+    VNCVIEWER             = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
+    VNCSNAPSHOT           = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
+    OPEN_SSH_IN_TERMINAL  = [
+                                "cmd.exe", "/k", "ssh.exe",
+                                "-o", "UserKnownHostsFile=/dev/null",
+                                "-o", "StrictHostKeyChecking=no"
+                            ]
 elif platform.system() == "Linux":
-    CMD = "ssh"
-    SCP = 'scp' 
-    VNCVIEWER = 'vncviewer'
-    VNCSNAPSHOT = 'vncsnapshot'
+    CMD                   = "ssh"
+    SCP                   = 'scp'
+    VNCVIEWER             = 'vncviewer'
+    VNCSNAPSHOT           = 'vncsnapshot'
 else:
     print("unsupported platform "  + platform.system())
     sys.exit(1)
 
-COMMON_SSH_OPTS = [
-    '-o', "ConnectTimeout=10",
-    '-o', "CheckHostIP=no",
-    "-o", "UserKnownHostsFile=/dev/null",
-    "-o", "StrictHostKeyChecking=no"
-]
-
-KEEP_ALIVE_SSH_OPTS = [
-    '-o', "ServerAliveInterval=60",
-    '-o', "TCPKeepAlive=true"
-]
-
-
-SCREENSHOT_CMD = 'DISPLAY=:1 scrot -z --thumb 20 ~/screenshot_1.jpg'
-VNCTUNNEL_CMD = "{} "
-
-CHECK_VNCSERVER_CMD = '[[ $(vncserver -list | grep "^:1\s\+[0-9]\+") ]]'
-START_VNCSERVER_CMD = 'vncserver -geometry  1280x720 --I-KNOW-THIS-IS-INSECURE  -securitytypes  TLSNone,X509None,None -localhost yes -blacklisttimeout 0 -alwaysshared :1' 
-RUN_VNCSERVER_IF_NEED =  "{} || {}".format(CHECK_VNCSERVER_CMD, START_VNCSERVER_CMD)
-
-MOBAXTERM_CMD = r'C:\Program Files (x86)\Mobatek\MobaXterm\MobaXterm.exe'
-START_VNC_VIA_MOBAXTER = [MOBAXTERM_CMD, "-exec", "ssh -i C:/Users/sinhnn/Documents/GitHub/ssh/linode/id_rsa root@192.155.93.130 'vncviewer :1'" ]
-
-
-REQUIREMENTS = ["xorg", "xserver-xorg",
-        "openbox", "obmenu",
-        "tigervnc*", "wget", "curl",
-        "firefox", "cifs-utils",
-        "caja", "mate-terminal", "caja-open-terminal",
-        "ffmpeg", "scrot", "xsel", "xdotool"]
-INSTALL_REQUIREMENT_CMD = 'sudo apt update && pgrep -f "apt\s+install" || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
 
 def intersection(l1, l2):
     tmp = set(l2)
@@ -105,13 +130,17 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         return self.config.get(key, default)
 
     def local_bind_address_str(self):
-        if self.get('local_bind_address'):
-            return '{}:{}'.format(self.get('local_bind_address')[0], self.get('local_bind_address')[1])
+        key = 'local_bind_address'
+        if self.get(key):
+            return '{}:{}'.format(self.get(key)[0], self.get(key)[1])
         else:
-            return '{}:{}'.format(self.get('local_bind_host'), self.get('local_bind_port'))
+            host = self.get('local_bind_host')
+            port = self.get('local_bind_port')
+            return '{}:{}'.format(host, port)
 
     def remote_bind_address_str(self):
-        remote_bind_address = self.get('remote_bind_address', (None,None))
+        key = 'remote_bind_address'
+        remote_bind_address = self.get(k, (None,None))
         return '{}:{}'.format(remote_bind_address[0],remote_bind_address[1])
 
     def __eq__(self, other):
@@ -124,8 +153,8 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
 
     def start_by_subprocess(self):
         args = [CMD]
-        args.extend(COMMON_SSH_OPTS)
-        args.extend(KEEP_ALIVE_SSH_OPTS)
+        args.extend(SSH_COMMON_OPTS)
+        args.extend(SSH_KEEP_ALIVE_OPTS)
         args.extend(['-C2qTnN'])
 
         if self.config.get('ssh_pkey'):
@@ -157,37 +186,34 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         return False    
 
 
+
 class SSHClient(object):
-    '''
-        SSH, SCP, SSH tunnel, VNCViewer via SSH tunnel
-    '''
+    ''' SSH, SCP, SSH tunnel, VNCViewer via SSH tunnel '''
     __REQUIRED__ = ['hostname', 'username']
-    __ANY__ = [['password', 'key_filename', 'pkey']]
-    MAX_FAILED_CONNECTED = 10
-    NEXT_ID = 0
+    __ANY__      = [['password', 'key_filename', 'pkey']]
+    NEXT_ID      = 0
 
-    def __init__(self, info, fileConfig=None, vncthumb=True, **kwargs):
-        self.info = utils.rm_empty(info)
-        self.config = self.info.get('config', {})
-        self.fileConfig  = fileConfig
-        self.id = SSHClient.NEXT_ID
-        SSHClient.NEXT_ID += 1
-        # self.vncthumb = vncthumb
-        self.status = {'screenshot' : None,  'vncserver': []}
+    def __init__(self, info, fileConfig=None, **kwargs):
+        self.info               = utils.rm_empty(info)
+        self.config             = self.info.get('config', {})
+        self.fileConfig         = fileConfig
+        self.id                 = SSHClient.NEXT_ID
+        SSHClient.NEXT_ID      += 1
+        self.status             = {'screenshot' : None,  'vncserver': []}
         self.initLogger()
-        self.portscanner = PortScanner()
+        self.portscanner        = PortScanner()
 
-        self.tunnels = []
-        self.tunnel_proc = []
+        self.tunnels            = []
+        self.tunnel_proc        = []
 
-        self.processes = [] # store all child process
+        self.processes          = [] # store all child process
 
-        self.exec_command_list = [] # store all child process
-        self.exec_command_cid = 0
+        self.exec_command_list  = [] # store all child process
+        self.exec_command_cid   = 0
 
-        self.threads = []
+        self.threads            = []
 
-        self.__failedConnect__ = 0
+        self.__failedConnect__  = 0
 
 
     def loadFileConfig(self, path):
@@ -294,9 +320,6 @@ class SSHClient(object):
         self.threads.append(thread)
 
 
-        # remove all download thumbnail
-
-
     def __eq__(self, other):
         if self.get('hostname') == other.get('hostname') \
             and self.get('username') == other.get('username') \
@@ -363,10 +386,17 @@ class SSHClient(object):
             # print(results)
         return results
 
+    def check_failed_connection(self):
+        if SSH_MAX_FAILED < self.__failedConnect__ < SSH_REFRESH_CONNECTION:
+            self.log("disabled because of many connection failures")
+            return False
+
+        if self.__failedConnect__ >= SSH_REFRESH_CONNECTION:
+            self.force_reconnect()
+        return True
 
     def run_processes(self, args, **kwargs):
-        if self.__failedConnect__ >= SSHClient.MAX_FAILED_CONNECTED:
-            self.log("disabled because of many connection failures")
+        if not self.check_failed_connection():
             return False
 
         for proc in self.processes:
@@ -480,8 +510,8 @@ class SSHClient(object):
         # #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
         # port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
         # args = [CMD]
-        # args.extend(COMMON_SSH_OPTS)
-        # args.extend(KEEP_ALIVE_SSH_OPTS)
+        # args.extend(SSH_COMMON_OPTS)
+        # args.extend(SSH_KEEP_ALIVE_OPTS)
         # args.extend(['-L', '{}:localhost:5901'.format(port)])
         # args.extend(self.__base_opt__())
         # proc = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
@@ -490,14 +520,14 @@ class SSHClient(object):
         # return proc
 
     def __base_opt__(self):
-        args = COMMON_SSH_OPTS.copy()
+        args = SSH_COMMON_OPTS.copy()
         if self.config.get('key_filename'):
             args.extend(['-i', self.config['key_filename']])
         args.append(self.__hostaddress__())
         return args
 
     def __base_opt_scp__(self):
-        args = COMMON_SSH_OPTS.copy()
+        args = SSH_COMMON_OPTS.copy()
         if self.config.get('key_filename'):
             args.extend(['-i', self.config['key_filename']])
         return args
@@ -508,9 +538,7 @@ class SSHClient(object):
 
     #ERROR: hangout when running
     def exec_command_subprocess(self, command, log=True, **kwargs):
-        # if log: self.log("excuting {}".format(command), level=logging.INFO)
-        if self.__failedConnect__ >= SSHClient.MAX_FAILED_CONNECTED:
-            self.log("disabled because of many connection failures")
+        if not self.check_failed_connection():
             return False
 
         args = [CMD]
@@ -530,9 +558,8 @@ class SSHClient(object):
         return False
 
     def exec_command(self, command, log=True):
-        if self.__failedConnect__ >= SSHClient.MAX_FAILED_CONNECTED:
-            self.log("disabled because of many connection failures")
-            return (False, [], [])
+        if not self.check_failed_connection():
+            return (False,[],[])
 
         if self.__is_command_in_runnning_list__(command):
             return (False, [], [])
@@ -595,7 +622,7 @@ class SSHClient(object):
 
     def __get_vnctunnel__(self):
         '''searching for running ssh tunnel'''
-        remote_bind_address = ('127.0.0.1', 5901)
+        remote_bind_address = REMOTE_BIND_ADDRESS
         ts = []
         for t in self.tunnels:
             if isinstance(t, SSHTunnelForwarder):
@@ -661,7 +688,7 @@ class SSHClient(object):
 
     def vncscreenshot(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        command = self.exec_command(SCREENSHOT_CMD, log=False)[0]
+        command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         if command == False or command == None:
             delete_file(local_path)
             return self.__delete_icon__()
@@ -676,7 +703,7 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path=os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
-        (command, out, err) = self.exec_command(SCREENSHOT_CMD, log=False)
+        (command, out, err) = self.exec_command(CMD_SCREENSHOT, log=False)
 
         if "giblib error: Can't open X display. It *is* running, yeah?\n" in err:
             self.create_vncserver(1)
@@ -685,7 +712,9 @@ class SSHClient(object):
         if command in [False, None]:
             delete_file(local_path)
             return self.__delete_icon__()
-        returncode = self.download_by_subprocess(src_path='screenshot_1-thumb.jpg', dst_path=local_path, stdout=subprocess.DEVNULL)
+        returncode = self.download_by_subprocess(src_path='screenshot_1-thumb.jpg',
+                dst_path=local_path,
+                stdout=subprocess.DEVNULL)
         if returncode != 0:
             delete_file(local_path)
             return self.__delete_icon__()
@@ -697,9 +726,9 @@ class SSHClient(object):
 
 
     def create_vncserver(self, x):
-        (c, out, err) = self.exec_command(RUN_VNCSERVER_IF_NEED, log=False)
+        (c, out, err) = self.exec_command(CMD_RUN_VNCSERVER_IF_NEED, log=False)
         if 'bash: vncserver: command not found\n' in err:
-            self.exec_command(INSTALL_REQUIREMENT_CMD)
+            self.exec_command(CMD_INSTALL_REQUIREMENT)
         return c
 
 
@@ -720,3 +749,6 @@ class SSHClient(object):
                 result.append((display, pid))
         return result
 
+
+if __name__ == "__main__":
+    pass
