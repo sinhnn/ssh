@@ -613,7 +613,10 @@ class SSHClient(object):
                 return (False, [], [])
         client.close()
         try:
-            self.exec_command_list.remove((cid, command))
+            for c in self.exec_command_list:
+                if c[0]  == cid:
+                    self.exec_command_list.remove(c)
+                    break
         except Exception as e:
             self.log(e, exc_info=True)
 
