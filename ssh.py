@@ -553,8 +553,14 @@ class SSHClient(object):
     def __is_command_in_runnning_list__(self, command):
         for c in self.exec_command_list:
             if command == c[1]:
-                self.log("paramiko: ignore run {}, because of is duplicated".format(command))
-                return True
+                if c[2] < 10:
+                    self.log("paramiko: ignore run {}, because of is duplicated".format(command))
+                    c[2] += 1
+                    return True
+                elif c[2] > 10:
+                    self.exec_command_list.remove(c)
+                    #  need to close process
+                    return False
         return False
 
     def exec_command(self, command, log=True):
@@ -566,7 +572,7 @@ class SSHClient(object):
 
         cid = self.exec_command_cid
         self.exec_command_cid += 1
-        self.exec_command_list.append((cid, command))
+        self.exec_command_list.append((cid, command, 0))
 
         client = self.connect()
         if not client:
@@ -581,7 +587,8 @@ class SSHClient(object):
 
         r_out = []
         r_err = []
-        while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready():
+        i = 0 #avoid dead-loop
+        while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready() and i < 1000:
             try:
                 out = stdout.readlines()
                 r_out.extend(out)
@@ -590,12 +597,16 @@ class SSHClient(object):
                     stdin.write(self.config['password'] + '\n')
                     stdin.flush()
                 if len(out):
+                    i = 0
                     self.log("{}\n{}".format(command, '\n'.join(out)), level=logging.INFO)
 
                 err  = stderr.readlines()
                 r_err.extend(err)
                 if len(err):
+                    i = 0
                     self.log("{}\n{}".format(command, '\n'.join(err)), level=logging.ERROR)
+
+                i += 1
 
             except Exception as e:
                 self.log(e, level=logging.ERROR)
