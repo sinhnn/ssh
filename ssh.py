@@ -43,7 +43,7 @@ SSH_KEEP_ALIVE_OPTS       = [
                                 '-o', "TCPKeepAlive=true"
                             ]
 
-REMOTE_BIND_ADDRESS       = ('127.0.0.1', '5901')
+REMOTE_BIND_ADDRESS       = ('127.0.0.1', 5901)
 
 SCREENSHOT_FILE           = '~/screenshot_1'
 SCREENSHOT_THUMB          = '~/screenshot_1-thumb.jpg'
@@ -125,6 +125,7 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         self.tunnel_proc = []
         if 'local_bind_port' not in self.config.keys():
             self.config['local_bind_port'] = self.config.get('local_bind_address',('127.0.0,1', None))[1]
+            logging.info(self.config['local_bind_port'])
 
     def get(self, key, default=None):
         return self.config.get(key, default)
@@ -485,7 +486,7 @@ class SSHClient(object):
     # https://sshtunnel.readthedocs.io/en/latest/
     def create_tunnel(self, port=None, **kwargs):
         #ERROR: Multiple ssh at same time will take the same portrint("automatic port")
-        port = self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000))
+        port = int(self.portscanner.getAvailablePort(range(6000 + self.id *5, 10000)))
         self.log('creating tunnel via port {}'.format(port),level=logging.INFO)
         try:
             local_bind_address = ('127.0.0.1', port)
@@ -572,7 +573,7 @@ class SSHClient(object):
 
         cid = self.exec_command_cid
         self.exec_command_cid += 1
-        self.exec_command_list.append((cid, command, 0))
+        self.exec_command_list.append([cid, command, 0])
 
         client = self.connect()
         if not client:

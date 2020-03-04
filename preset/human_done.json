@@ -1,0 +1,4 @@
+{
+	"name" : "Send YTV know deinterupt robot",
+	"value"  : "echo 0 > ~/.ytv/robot.txt"
+}
