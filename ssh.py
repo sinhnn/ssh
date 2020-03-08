@@ -32,9 +32,9 @@ SSH_MAX_FAILED            = 10
 SSH_REFRESH_CONNECTION    = 200
 SSH_PUBLIC_KEY_FILE       = os.path.join(__PATH__, 'id_rsa.pub')
 SSH_COMMON_OPTS           = [
-                                "-o", "ConnectTimeout=10",
+                                # "-o", "ConnectTimeout=10",
                                 "-o", "CheckHostIP=no",
-                                "-o", "UserKnownHostsFile=/dev/null",
+                                # "-o", "UserKnownHostsFile=/dev/null",
                                 "-o", "StrictHostKeyChecking=no"
                             ]
 
@@ -75,11 +75,7 @@ if platform.system() == "Windows":
     SCP                   = r'C:\Windows\System32\OpenSSH\scp.exe'
     VNCVIEWER             = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
     VNCSNAPSHOT           = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot' ))
-    OPEN_SSH_IN_TERMINAL  = [
-                                "cmd.exe", "/k", "ssh.exe",
-                                "-o", "UserKnownHostsFile=/dev/null",
-                                "-o", "StrictHostKeyChecking=no"
-                            ]
+    OPEN_SSH_IN_TERMINAL  = ["cmd.exe", "/k", "ssh.exe"] #+ SSH_COMMON_OPTS.copy()
 elif platform.system() == "Linux":
     CMD                   = "ssh"
     SCP                   = 'scp'
@@ -396,10 +392,17 @@ class SSHClient(object):
             self.force_reconnect()
         return True
 
+    def __rm_terminated_process__(self):
+        # rm = []
+        # for proc in self.processes:
+            # if proc.is_running() == False:
+                # rm.append(proc)
+        self.processes = [proc for proc in self.processes if proc.is_running()]
+
     def run_processes(self, args, **kwargs):
         if not self.check_failed_connection():
             return False
-
+        self.__rm_terminated_process__()
         for proc in self.processes:
             if proc.is_running() and args == proc.cmdline():
                 self.log("Ignore running {} because of duplicated".format(args))

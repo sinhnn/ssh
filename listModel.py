@@ -109,7 +109,13 @@ class ListModel(QtCore.QAbstractListModel):
 
         elif role == QtCore.Qt.ToolTipRole:
             try:
-                return item.loghandler.get_last_messages(10)
+                text = []
+                for t in item.tunnel_proc + item.processes + item.exec_command_list:
+                    text.append(str(t))
+                # text.extend(item.processes)
+                # text.extend(item.exec_command_list)
+                text.append(item.loghandler.get_last_messages(10))
+                return '\n'.join(text)
             except Exception as e:
                 return str( e)
 
@@ -226,6 +232,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
 
         self.scaleIcon(0.5)
+        self.setStyleSheet('border-width: 1px;border-color:black;')
         self.setSpacing(0)
         self.setUniformItemSizes(False)
 
@@ -269,9 +276,10 @@ class ThumbnailListViewer(QtWidgets.QListView):
         dialog = SSHInputDialog(parent=self)
         r = dialog.getResult()
         if not r: return
-        item = load_ssh_file(r)
-        item.info['filepath'] = str(r)
-        self.model().appendItem(item)
+        for f in r:
+            item = load_ssh_file(f)
+            item.info['filepath'] = str(r)
+            self.model().appendItem(item)
 
     def open_vncviewer(self):
         for item in self.selectedItems():

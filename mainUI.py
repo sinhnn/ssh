@@ -248,9 +248,9 @@ if __name__ == '__main__':
 
     fileHandler = logging.FileHandler(logfile, mode='a', encoding=None, delay=False)
     fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
-    fileHandler.setLevel(logging.INFO)
+    fileHandler.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(fileHandler)
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.DEBUG)
     logging.getLogger().propagate = True
 
 

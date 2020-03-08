@@ -124,7 +124,7 @@ class SSHInputDialog(QtWidgets.QDialog):
         self.buttonBox.rejected.connect(self.reject)
 
         layout.addWidget(QtWidgets.QLabel("Host Name/IP"), 0, 0)
-        self.hostnameWidget = QtWidgets.QLineEdit(self)
+        self.hostnameWidget = QtWidgets.QTextEdit(self)
         layout.addWidget(self.hostnameWidget, 0, 1)
 
         layout.addWidget(QtWidgets.QLabel("User Name"), 1, 0)
@@ -156,7 +156,7 @@ class SSHInputDialog(QtWidgets.QDialog):
         if self.result() == QtWidgets.QDialog.Rejected: return None
 
         info = { "config" : {
-                'hostname' : self.hostnameWidget.text(),
+                'hostname' : self.hostnameWidget.toPlainText(),
                 'username' : self.usernameWidget.text(),
                 'password' : self.passwordWidget.text(),
                 'key_filename' : self.private_key_file.text()
@@ -167,13 +167,27 @@ class SSHInputDialog(QtWidgets.QDialog):
         if not config['hostname'] or not config['username'] or not (config['password'] or config['key_filename']):
             QtWidgets.QMessageBox.critical(self, "SSH Error", "Invalid SSH config")
             return None
-
+        
         dialog = QtWidgets.QFileDialog()
-        files, _ = dialog.getSaveFileName(None, "Create New File", self.hostnameWidget.text() + '.json',"*.json");
-        if not files:
-            return None
-        with open(files, 'w') as fp:
-            json.dump(info, fp, indent=4)
+        d  = dialog.getExistingDirectory(self, "Choose Save Folder", "")
+
+        files = []
+        for hostname in info['config']['hostname'].splitlines():
+            if hostname.strip() == '': continue
+            of = os.path.join(d, hostname + '.json')
+            if os.path.isfile(of):
+                os.rename(of, of + '.back')
+            dinfo  = info.copy()
+            dinfo['config']['hostname'] = hostname
+            with open(of, 'w') as fp:
+                json.dump(dinfo, fp, indent=4)
+            files.append(of)
+
+
+        # if not files:
+            # return None
+        # with open(files, 'w') as fp:
+            # json.dump(info, fp, indent=4)
         return files
 
     def __browser__(self):
