@@ -195,7 +195,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'download' : self.download,
             'command' : self.exec_command, # from file or command
             'copy_hostaddress' : self.copy_hostaddress, # from file or command
-            'force_reconnect' : self.force_reconnect, # from file or command
+            'refresh' : self.force_reconnect, # from file or command
+            'reload_config' : self.reload_config, # from file or command
             'install_sshkey' : self.install_sshkey, # from file or command
             'delete' : self.move_to_trash, # from file or command
             'open_log' : self.open_log, # from file or command
@@ -301,6 +302,10 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def force_reconnect(self):
         for item in self.selectedItems():
             item.force_reconnect()
+
+    def reload_config(self):
+        for item in self.selectedItems():
+            item.reloadConfig()
 
     def open_log(self):
         for item in self.selectedItems():

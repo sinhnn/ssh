@@ -213,6 +213,7 @@ class SSHClient(object):
         self.__failedConnect__  = 0
 
 
+
     def loadFileConfig(self, path):
         try:
             with open(path, 'r') as fp:
@@ -223,6 +224,14 @@ class SSHClient(object):
 
         self.info = info
         self.config = config
+
+
+    def reloadConfig(self):
+        if os.path.isfile(self.fileConfig):
+            self.loadFileConfig(self.fileConfig)
+        elif os.path.isfile(self.get('filepath')):
+            self.loadFileConfig(self.get('filepath'))
+            self.fileConfig = self.get('filepath')
 
     def initLogger(self):
         try:
