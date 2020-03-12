@@ -235,7 +235,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.scaleIcon(0.5)
         self.setStyleSheet('border-width: 1px;border-color:black;')
         self.setSpacing(0)
-        self.setUniformItemSizes(False)
+        self.setUniformItemSizes(True)
 
     def setListView(self):
         self.setGridSize(QtCore.QSize(100, 60))
@@ -324,6 +324,22 @@ class ThumbnailListViewer(QtWidgets.QListView):
                         dst_path=info['dst_path'])
 
             self.threadpool.start(worker)
+
+
+    # def upload_to_path(self, path='~/.ytv'):
+    #     dialog = SCPDialog(download=False)
+    #     info = dialog.getResult()
+    #     if not info: return
+    #     for item in self.selectedItems():
+    #         worker = Worker(item.upload_by_subprocess, 
+    #                     recursive=False,
+    #                     src_path=info['src_path'],
+    #                     dst_path=info['dst_path'])
+
+    #         self.threadpool.start(worker)
+
+
+
 
     def download(self):
         dialog = SCPDialog(download=True)

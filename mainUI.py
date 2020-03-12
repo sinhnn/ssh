@@ -246,13 +246,19 @@ if __name__ == '__main__':
     if os.path.isfile(logfile):
         open(logfile, 'w').write('')
 
-    fileHandler = logging.FileHandler(logfile, mode='a', encoding=None, delay=False)
-    fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
-    fileHandler.setLevel(logging.DEBUG)
-    logging.getLogger().addHandler(fileHandler)
-    logging.getLogger().setLevel(logging.DEBUG)
-    logging.getLogger().propagate = True
+    
+    logging.basicConfig(
+        filename = 'log.txt',
+        level = logging.INFO,
+        format = DEBUG_FORMAT
+    )
 
+    # fileHandler = logging.FileHandler(logfile, mode='a', encoding=None, delay=False)
+    # fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
+    # fileHandler.setLevel(logging.DEBUG)
+    # logging.getLogger().addHandler(fileHandler)
+    # logging.getLogger().setLevel(logging.DEBUG)
+    # logging.getLogger().propagate = False
 
     if len(argv) == 2:
         w = MainFrame(dir=argv[1])

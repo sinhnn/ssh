@@ -47,7 +47,7 @@ REMOTE_BIND_ADDRESS       = ('127.0.0.1', 5901)
 
 SCREENSHOT_FILE           = '~/screenshot_1'
 SCREENSHOT_THUMB          = '~/screenshot_1-thumb.jpg'
-CMD_SCREENSHOT            = 'DISPLAY=:1 scrot -z --thumb 20 ~/screenshot_1.jpg'
+CMD_SCREENSHOT            = 'DISPLAY=:1 scrot -z --thumb 10 ~/screenshot_1.jpg'
 CMD_CHECK_VNCSERVER       = '[[ $(vncserver -list | grep "^:1\s\+[0-9]\+") ]]'
 CMD_START_VNCSERVER       = 'vncserver -geometry  1280x720' \
                                 + ' --I-KNOW-THIS-IS-INSECURE' \
