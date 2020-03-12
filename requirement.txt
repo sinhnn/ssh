@@ -1,6 +1,6 @@
 paramiko
 sshtunnel
 scp
-requests
-socket
+requests[socks]
 tailer
+pyQt5

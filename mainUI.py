@@ -224,51 +224,35 @@ class MainFrame(QtWidgets.QMainWindow):
         spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
-        
+
         # dlg.setMinimumSize(450, 0)
-        return dlg;
+        return dlg
 
 
 if __name__ == '__main__':
 
     DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
-    if os.path.isfile('log.txt'):
-        open('log.txt', 'w').write('')
-
-
     argv = sys.argv
-    app = QApplication(argv)
-    app.setWindowIcon(getAppIcon())
-    
     logfile = 'log.txt'
     if len(argv) == 2:
         logfile = os.path.dirname(argv[1]) + '.' + logfile
-    if os.path.isfile(logfile):
-        open(logfile, 'w').write('')
-
-    
+    open(logfile, 'w', encoding='utf-8').write('')
     logging.basicConfig(
-        filename = 'log.txt',
-        level = logging.INFO,
-        format = DEBUG_FORMAT
-    )
+            filename=logfile,
+            filemode='a',
+            level=logging.ERROR,
+            format=DEBUG_FORMAT)
 
-    # fileHandler = logging.FileHandler(logfile, mode='a', encoding=None, delay=False)
-    # fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
-    # fileHandler.setLevel(logging.DEBUG)
-    # logging.getLogger().addHandler(fileHandler)
-    # logging.getLogger().setLevel(logging.DEBUG)
-    # logging.getLogger().propagate = False
-
+    app = QApplication(argv)
+    app.setWindowIcon(getAppIcon())
     if len(argv) == 2:
         w = MainFrame(dir=argv[1])
     else:
         w = MainFrame()
-    # screenrect = QApplication::desktop().screenGeometry();
-    w.move(0,0)
+
+    w.move(0, 0)
     if os.path.isfile('stylesheet.css'):
         with open('stylesheet.css', 'r') as fp:
-            # w.setStyleSheet("QToolTip{ border: 1px solid white; font-family: 'Courier New';}")
             w.setStyleSheet(fp.read())
     w.show()
     app.exec_()
