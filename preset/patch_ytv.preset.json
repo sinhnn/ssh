@@ -1,0 +1,4 @@
+{
+	"name" : "PATCH ytv",
+	"value"  : "wget 'https://drive.google.com/uc?export=download&id=1d8IMX3AgLN-Ydddr9FWqflHaKvHKv4o9' -O ~/ytv/ytv"
+}

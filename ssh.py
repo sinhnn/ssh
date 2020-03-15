@@ -25,6 +25,7 @@ __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __CACHE__ = os.path.join(__PATH__, 'cache')
 SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'sshclient.json')
 
+
 __CONFIGS__ = {}
 if os.path.isfile(SSHCLIENT_CONFIG_FILE):
     try:
@@ -39,6 +40,7 @@ SSH_MAX_FAILED = 10
 SSH_REFRESH_CONNECTION = 200
 SSH_PUBLIC_KEY_FILE = os.path.join(__PATH__, 'id_rsa.pub')
 SSH_COMMON_OPTS = [
+    # "-v",
     # "-o", "ConnectTimeout=10",
     "-o", "CheckHostIP=no",
     # "-o", "UserKnownHostsFile=/dev/null",
@@ -84,10 +86,12 @@ if platform.system() == "Windows":
     SCP = r'C:\Windows\System32\OpenSSH\scp.exe'
     VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
     VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot'))
-    OPEN_SSH_IN_TERMINAL = ["cmd.exe", "/k", "ssh.exe"]
+    OPEN_IN_TERMINAL = ["cmd.exe", "/k"]
+    OPEN_SSH_IN_TERMINAL = OPEN_IN_TERMINAL + ["ssh.exe"]
 elif platform.system() == "Linux":
     CMD = "ssh"
     SCP = 'scp'
+    OPEN_IN_TERMINAL = []
     VNCVIEWER = 'vncviewer'
     VNCSNAPSHOT = 'vncsnapshot'
 else:
@@ -103,6 +107,54 @@ def intersection(l1, l2):
 def delete_file(path):
     if os.path.isfile(str(path)):
         os.remove(str(path))
+
+
+def progress(filename, size, sent):
+    sys.stdout.write("%s\'s progress: %.2f%%   \r" % (filename, float(sent)/float(size)*100) )
+
+class FakeStdOut(object):
+    def __init__(self, name, file_, maxlen=10, parent=None):
+        super(FakeStdOut, self).__init__()
+        self.name = name
+        self.file = file_
+        self.changed = True
+        self.parent = parent
+        self.__records__ = collections.deque(maxlen=maxlen)
+
+    def __str__(self):
+        try:
+            return str(self.__records__[0])
+        except Exception as e:
+            return ""
+
+    def write(self, str):
+        self.__records__.appendleft(str.strip())
+        self.changed = True
+        if self.name not in self.parent.changed:
+            self.parent.changed.append(self.name)
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+    def __lt__(self, other):
+        return str(self) < str(other)
+    
+    def __le__(self, other):
+        return str(self) <= str(other)
+    
+    def __gt__(self, other):
+        return str(self) > str(other)
+    
+    def __ge__(self, other):
+        return str(self) >= str(other)
+        pass
+    
+    def __cmp__(self, other):
+        pass
+
 
 
 class StoredLoggerHandler(logging.FileHandler):
@@ -217,9 +269,26 @@ class SSHClient(object):
         self.fileConfig = fileConfig
         self.id = SSHClient.NEXT_ID
         SSHClient.NEXT_ID += 1
-        self.status = {'screenshot': None,  'vncserver': []}
+
         self.initLogger()
         self.portscanner = PortScanner()
+
+        self.changed = []
+        self.status = {
+            'lastcmd': FakeStdOut(
+                name='lastcmd',
+                file_='', #os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                parent=self),
+            'msg': FakeStdOut(
+                name='msg',
+                file_='', #os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                parent=self),
+            'error': FakeStdOut(
+                name='error',
+                file_='', #os.path.join(__CACHE__, '{}.stderr.txt'.format(self.get('hostname'))),
+                parent=self)
+        }
+
 
         self.tunnels = []
         self.tunnel_proc = []
@@ -291,26 +360,29 @@ class SSHClient(object):
             self.threads.append(thread)
 
     def log(self, s, level=logging.INFO, **kwargs):
-        text = '{}@{} {}'.format(
-                self.config.get('username'),
-                self.config.get('hostname'),
-                s)
-        if level == logging.INFO:
-            logging.info(text, **kwargs)
-            self.logger.info(text, **kwargs)
-        elif level == logging.DEBUG:
-            logging.debug(text, **kwargs)
-            self.logger.debug(text, **kwargs)
-        elif level == logging.ERROR:
-            logging.error(text, **kwargs)
-            self.logger.error(text, **kwargs)
-        elif level == logging.CRITICAL:
-            logging.critical(text, **kwargs)
-            self.logger.critical(text, **kwargs)
-        return text
+        try:
+            text = '{}@{} {}'.format(
+                    self.config.get('username'),
+                    self.config.get('hostname'),
+                    s)
+            if level == logging.INFO:
+                logging.info(text, **kwargs)
+                self.logger.info(text, **kwargs)
+            elif level == logging.DEBUG:
+                logging.debug(text, **kwargs)
+                self.logger.debug(text, **kwargs)
+            elif level == logging.ERROR:
+                logging.error(text, **kwargs)
+                self.logger.error(text, **kwargs)
+            elif level == logging.CRITICAL:
+                logging.critical(text, **kwargs)
+                self.logger.critical(text, **kwargs)
+            return text
+        except Exception:
+            pass
 
     def keys(self):
-        return self.config.keys()
+        return list(self.config.keys()) + list(self.status.keys())
 
     def get(self, k, default=None):
         '''get status/configuration key'''
@@ -345,6 +417,7 @@ class SSHClient(object):
         return True
 
     def force_reconnect(self):
+        self.updating_thumbnail = False
         self.__failedConnect__ = 0
         self.exec_command_list.clear()
         self.processes.clear()
@@ -362,7 +435,7 @@ class SSHClient(object):
 
     def __del__(self):
         try:
-            self.log('closing ssh client', level=logging.ERROR)
+            self.log('closing ssh client', level=logging.DEBUG)
             for t in self.tunnels:
                 t.stop()
             for p in self.processes:
@@ -375,7 +448,7 @@ class SSHClient(object):
             self.log(e, level=logging.DEBUG, exc_info=True)
             pass
 
-    def upload(self, files, remote_path):
+    def upload(self, files, remote_path, recursive):
         self.log(
                 'upload {} to {}'.format(files, remote_path),
                 level=logging.INFO)
@@ -384,7 +457,7 @@ class SSHClient(object):
             client = self.connect()
             if not client:
                 return results
-            scp = SCPClient(client.get_transport())
+            scp = SCPClient(client.get_transport(), progress)
             for f in files:
                 try:
                     r = bool(os.path.isdir(f))
@@ -436,35 +509,43 @@ class SSHClient(object):
     def __rm_terminated_process__(self):
         self.processes = [proc for proc in self.processes if proc.is_running()]
 
-    def run_processes(self, args, **kwargs):
-        if not self.check_failed_connection():
-            return False
-        self.__rm_terminated_process__()
-        for proc in self.processes:
-            if proc.is_running() and args == proc.cmdline():
-                self.log("ignore {} because of duplicated".format(args))
-                return True
+    def run_processes(self, args, store=False, **kwargs):
+        try:
+            if not self.check_failed_connection():
+                return False
+            self.__rm_terminated_process__()
+            for proc in self.processes:
+                if proc.is_running() and args == proc.cmdline():
+                    self.log("ignore {} because of duplicated".format(args))
+                    return True
 
-        if not kwargs.get('stdout'):
-            kwargs['stdout'] = subprocess.PIPE
+            if kwargs.get('creationflags') == subprocess.CREATE_NEW_CONSOLE:
+                args = OPEN_IN_TERMINAL + args
+            proc = psutil.Popen(args, **kwargs)
+            if kwargs.get('creationflags') == subprocess.CREATE_NEW_CONSOLE:
+                return 0
+            self.processes.append(proc)
 
-        if not kwargs.get('stderr'):
-            kwargs['stderr'] = subprocess.PIPE
+            if kwargs.get('stdout') == subprocess.PIPE:
+                o, e = proc.communicate(timeout=30)
+                if store is True:
+                    self.status['msg'].write(o)
+                    self.status['error'].write(e)
+                if kwargs.get('stdout') == subprocess.PIPE:
+                    if o:
+                        self.log('{}\n{}'.format(" ".join(args), o))
+                if kwargs.get('stderr') == subprocess.PIPE:
+                    if e:
+                        self.log(
+                            '{}\n{}'.format(" ".join(args), e.decode('utf-8')),
+                            level=logging.ERROR)
 
-        proc = psutil.Popen(args, **kwargs)
-        self.processes.append(proc)
-        if kwargs.get('stdout') == subprocess.PIPE:
-            o = proc.communicate()[0]
-            if len(o):
-                self.log('{}\n{}'.format(" ".join(args), o))
-        if kwargs.get('stderr') == subprocess.PIPE:
-            e = proc.communicate()[1]
-            if len(e):
-                self.log(
-                        '{}\n{}'.format(" ".join(args), e.decode('utf-8')),
-                        level=logging.ERROR)
-        proc.wait()
-        return proc.returncode
+            proc.wait()
+            return proc.returncode
+        except Exception as e:
+            if store is True:
+                self.status['error'].write(e)
+            return -1
 
     def scp_by_subprocess(self, src_path, dst_path, recursive=False, quiet=False, tries=3, **kwargs):
         if tries <= 0:
@@ -486,7 +567,7 @@ class SSHClient(object):
         returncode = self.run_processes(args, **kwargs)
         if returncode not in [0, True]:
             self.log(
-                    "retry copy {} to {}".format(src_path, dst_path),
+                    "retry copy with code {} {} to {}".format(returncode, src_path, dst_path),
                     level=logging.ERROR)
             return self.scp_by_subprocess(
                     src_path=src_path,
@@ -495,23 +576,43 @@ class SSHClient(object):
                     quiet=quiet,
                     tries=tries-1,
                     **kwargs)
+        else:
+            return returncode
 
-    def upload_by_subprocess(self, src_path, dst_path, recursive=False):
+    def upload_by_subprocess(self, src_path, dst_path, recursive=False, store=True, **kwargs):
+        if store:
+            self.status['msg'].write('UPLOADING {} --> {}'.format(src_path, dst_path))
         p = self.__hostaddress_path__(dst_path)
         self.log('uploading {}'.format(src_path))
-        return self.scp_by_subprocess(src_path, p, recursive)
+        r = self.scp_by_subprocess(src_path, p, recursive,  **kwargs)
+
+        if store is True:
+            if r in [0, True]:
+                self.status['msg'].write('{} --> {}'.format(src_path, dst_path))
+            else:
+                self.status['error'].write('[{}] - FAILED UPLOAD: {} --> {}'.format(r, src_path, dst_path))
+        return r
 
     def __hostaddress_path__(self, path):
         return '{}:{}'.format(self.__hostaddress__(), path)
 
-    def download_by_subprocess(self, src_path, dst_path, recursive=False, **kwargs):
+    def download_by_subprocess(self, src_path, dst_path, recursive=False, store=False, **kwargs):
+        if store:
+            self.status['msg'].write('DOWNLOADING {} --> {}'.format(src_path, dst_path))
         if isinstance(src_path, list):
             p = [self.__hostaddress_path__(p) for p in src_path]
         else:
             p = self.__hostaddress_path__(src_path)
 
         self.log('downloading {}'.format(src_path))
-        return self.scp_by_subprocess(p, dst_path, recursive, **kwargs)
+        r = self.scp_by_subprocess(p, dst_path, recursive, **kwargs)
+
+        if store is True:
+            if r in [0, True]:
+                self.status['msg'].write('{} --> {}'.format(src_path, dst_path))
+            else:
+                self.status['error'].write('[{}] - FAILED UPLOAD: {} --> {}'.format(r, src_path, dst_path))
+        return r
 
     def connect(self, client=None, tries=2):
         if not self.is_valid():
@@ -535,7 +636,9 @@ class SSHClient(object):
         except socket.timeout:
             self.__delete_icon__()
             return self.connect(client=client, tries=tries-1)
-        except Exception as e:
+        except paramiko.ssh_exception.SSHException:
+            return self.connect(client=client, tries=tries-1)
+        except Exception:
             self.log(
                     'unable to connect from {}'.format(self.config),
                     level=logging.ERROR, exc_info=True)
@@ -625,7 +728,7 @@ class SSHClient(object):
                 self.exec_command_list.remove(c)
                 return
 
-    def exec_command(self, command, log=True):
+    def exec_command(self, command, store=False, background=False, log=True):
         if not self.check_failed_connection():
             return (False, [], [])
 
@@ -635,6 +738,10 @@ class SSHClient(object):
         client = self.connect()
         if not client:
             return (False, [], [])
+
+        if re.search(r'&\s*$', command):
+            command  = re.sub(r'&\s*$', '', command)
+            background = True
 
         cid = self.exec_command_cid
         self.exec_command_cid += 1
@@ -647,12 +754,21 @@ class SSHClient(object):
             self.log(e, level=logging.ERROR)
             self.__rm_exec_command_list_id__(cid)
             return (False, [], [])
+        if store:
+            self.status['lastcmd'].write(command)
+            self.status['msg'].write(command)
+
+        if background == True:
+            self.status['msg'].write("run in background")
+            client.close()
+            self.__rm_exec_command_list_id__(cid)
+            return (command, [], [])
 
         r_out = []
         r_err = []
         # avoid dead-loop
         i = 0
-        while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready() and i < 1000:
+        while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready() and i < 10000:
             try:
                 out = stdout.readlines()
                 r_out.extend(out)
@@ -662,23 +778,31 @@ class SSHClient(object):
                     stdin.flush()
                 if len(out):
                     i = 0
-                    self.log("{}\n{}".format(
-                        command, '\n'.join(out)),
-                        level=logging.INFO)
+                    self.log("{}\n{}".format( command, ''.join(out)))
+
                 err = stderr.readlines()
                 r_err.extend(err)
                 if len(err):
                     i = 0
-                    self.log("{}\n{}".format(
-                        command,
-                        '\n'.join(err)),
-                        level=logging.ERROR)
+                    self.log("{}\n{}".format( command, ''.join(err)), level=logging.ERROR)
+
+                if store:
+                    if len(out):
+                        m = min(10, len(out))
+                        self.status['msg'].write(''.join(out[-m:]).strip())
+                    if len(err):
+                        self.status['error'].write(''.join(err).strip())
+                    else:
+                        self.status['error'].write('')
                 i += 1
             except Exception as e:
-                self.log(e, level=logging.ERROR)
+                self.log(e, level=logging.ERROR, exc_info=True)
                 self.__rm_exec_command_list_id__(cid)
                 return (False, [], [])
-        if i >= 1000:
+
+        if str(self.status['msg']) == str(self.status['lastcmd']):
+            self.status['msg'].write('')
+        if i >= 10000:
             self.log('timeout to execute command')
         client.close()
         self.__rm_exec_command_list_id__(cid)
@@ -788,6 +912,7 @@ class SSHClient(object):
                 src_path='screenshot_1-thumb.jpg',
                 dst_path=local_path,
                 stdout=subprocess.DEVNULL)
+
         if returncode != 0:
             delete_file(local_path)
             return self.__delete_icon__()
@@ -804,7 +929,7 @@ class SSHClient(object):
         if new:
             files = ['~/.ytv', '~/.config/google-chrome']
             cmd = 'tar -zcvf ~/backup.tar.gz {}'.format(' '.join(files))
-            (command, out, err) = self.exec_command(cmd)
+            (command, out, err) = self.exec_command(cmd, store=True)
             if command != cmd:
                 self.log('unable to create backup file', level=logging.ERROR)
                 self.backup(dst_path=dst_path, new=True, tries=tries-1)
@@ -813,10 +938,11 @@ class SSHClient(object):
                 dst_path,
                 self.get('hostname'),
                 '{}.tar.gz'.format(self.get('hostname')))
+        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
         r = self.download_by_subprocess(
                 src_path='~/backup.tar.gz',
                 dst_path=dst_file,
-                stdout=subprocess.DEVNULL)
+                store=True)
         return r
 
     def vncserver_list(self):

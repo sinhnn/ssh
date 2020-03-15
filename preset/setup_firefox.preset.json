@@ -1,4 +1,0 @@
-{
-	"name" : "Setup Firefox",
-	"value" : "mkdir -p ~/.mozilla/firefox/ytv.default-release && mkdir -p ~/.mozilla/firefox/ytv.default && echo -e \"[Install4F96D1932A9F858E]\nDefault=ytv.default-release\nLocked=1\n\n[Profile1]\nName=default\nIsRelative=1\nPath=ytv.default\nDefault=1\n\n[Profile0]\nName=default-release\nIsRelative=1\nPath=ytv.default-release\n\n[General]\nStartWithLastProfile=1\nVersion=2\" > ~/.mozilla/firefox/profiles.ini && echo 'user_pref(\"general.useragent.override\",\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36\");' >> ~/.mozilla/firefox/ytv.default/user.jsx"
-}

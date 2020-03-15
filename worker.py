@@ -25,17 +25,27 @@ class Worker(QRunnable):
     Worker thread
     Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
     '''
+    id = 0
     def __init__(self, fn, *args, **kwargs):
         super(Worker, self).__init__()
         # Store constructor arguments (re-used for processing)
         self.fn = fn
+        self.id = id
+        Worker.id += 1
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
         self.setAutoDelete(True)
+        self.done = False
 
         # Add the callback to our kwargs
         # self.kwargs['progress_callback'] = self.signals.progress
+
+    def __str__(self):
+        return '[{}] Worker({}, {}, {})'.format(self.done, self.fn, self.args, self.kwargs)
+
+    def __eq__(self, other):
+        return (self.id == other.id)
 
     @pyqtSlot()
     def run(self):
@@ -51,11 +61,21 @@ class Worker(QRunnable):
                 exctype, value = sys.exc_info()[:2]
                 self.signals.error.emit((exctype, value, traceback.format_exc()))
             else:
-                self.signals.result.emit(result)  # Return the result of the processing
+                try:
+                    self.signals.result.emit(result)  # Return the result of the processing
+                except AttributeError:
+                    pass
             finally:
-                self.signals.finished.emit()  # Done
+                try:
+                    self.signals.finished.emit()  # Done
+                except AttributeError:
+                    pass
         except RuntimeError as e:
             logging.error("RuntimeError: wrapped C/C++ object of type WorkerSignals has been deleted")
+        try:
+            self.done =True
+        except Exception:
+            pass
 
 class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
@@ -107,6 +127,18 @@ class MainWindow(QMainWindow):
         worker.signals.progress.connect(self.progress_fn)
         # Execute
         self.threadpool.start(worker)
+
+
+class MThreadPool(QThreadPool):
+    """docstring for MThreadPool"""
+    def __init__(self, tasklist, parent=None, **kwargs):
+        QThreadPool.__init__(self, parent, **kwargs)
+        self.tasklist = tasklist
+
+    def start(self, worker):
+        self.tasklist.append(worker)
+        QThreadPool.start(worker)
+
 
 if __name__ == "__main__":
     app = QApplication([])

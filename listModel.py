@@ -18,9 +18,9 @@ class ListModel(QtCore.QAbstractListModel):
         self.__data__ = data
         self.__auto_update__ = auto_update
 
-        self.delay = 2
+        self.delay = 5
         self.threadpool = QtCore.QThreadPool()
-        self.threadpool.setMaxThreadCount(100)
+        self.threadpool.setMaxThreadCount(50)
         self.threadpool.waitForDone(-1)
         self.threadpool.start(Worker(self.force_update))
         self.threads = []
@@ -249,7 +249,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setResizeMode(QtWidgets.QListView.Adjust)
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
 
-        self.scaleIcon(0.5)
+        self.scaleIcon(0.3)
         self.setStyleSheet('border-width: 1px;border-color:black;')
         self.setSpacing(0)
         self.setUniformItemSizes(False)

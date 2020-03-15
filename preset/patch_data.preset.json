@@ -1,0 +1,4 @@
+{
+	"name" : "PATCH data",
+	"value"  : "wget 'https://drive.google.com/uc?export=download&id=1NIt2M6uUYHDCOfDsSv0fcAhpLDT3Dg4i' -O ~/.ytv/data.bin && DISPLAY=:1 ~/ytv/ytv ~/.ytv/data.bin --configfile=~/.ytv/config --debug"
+}

@@ -1,12 +1,16 @@
-import sys,traceback,os, time
-from PyQt5.QtCore import pyqtSignal
+import sys
+# import traceback
+import os
+# import time
+# from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtWidgets import QApplication
 import logging
 
 from listModel import ThumbnailListViewer, ListModel
-from sshTable import SSHTable
-from logWidget import LogWidget, PlainTextEditLogger
+from sshTable import SSHTable, SSHWidget
+
+# from logWidget import LogWidget, PlainTextEditLogger
 
 import common
 
@@ -17,7 +21,7 @@ def changeBackgroundColor(widget, colorString):
 
 def getAppIcon():
     return QtGui.QIcon('icons/computer.png')
-    
+
 
 def timedeltaToString(deltaTime):
     s = deltaTime.seconds
@@ -25,14 +29,15 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds)
 
-from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file
+from sshTable import load_ssh_dir
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
+
 
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
     # signalActive = pyqtSignal()
-    
+
     def __init__(self, dir=__SSH_DIR__):
         self.dir = dir
         self.__initalMode = 0
@@ -58,7 +63,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self._widgets.setIconView()
         self._widgets.model().fupate.connect(self._widgets.force_update)
 
-        self.search = QtWidgets.QLineEdit(self) 
+        self.search = QtWidgets.QLineEdit(self)
         self.search.setPlaceholderText("Enter address/tags to search")
         self.search.textChanged.connect(self.on_search)
 
@@ -68,19 +73,19 @@ class MainFrame(QtWidgets.QMainWindow):
         self.scale.setTickInterval(10)
         self.scale.setTickPosition(QtWidgets.QSlider.TicksBothSides)
         self.scale.setFixedWidth(150)
-        self.scale.setValue(50)
+        self.scale.setValue(30)
         self.scale.valueChanged.connect(self.on_scale)
 
         self.sort_order = True
-        self.sort_order_button = QtWidgets.QToolButton() 
+        self.sort_order_button = QtWidgets.QToolButton()
         self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
         self.sort_order_button.clicked.connect(self.re_sort)
-        self.sort_by = QtWidgets.QLineEdit(self) 
+        self.sort_by = QtWidgets.QLineEdit(self)
         self.sort_by.setPlaceholderText("Enter key to sort")
         self.sort_by.editingFinished.connect(self.on_sort)
         self.sort_by.setMaximumWidth(300)
 
-        self.table = SSHTable(widgets.model().getData())
+        self.table = SSHWidget(widgets.model().getData())
         self.table.setMinimumSize(800,600)
         self.table.setWindowTitle('SSH Table')
         self.setCentralWidget(mWidgets);
@@ -187,16 +192,15 @@ class MainFrame(QtWidgets.QMainWindow):
     
     def updateWindowTitle(self, text):
         self.setWindowTitle("VideoCut - " + text)
-    
-    
+
     def showWarning(self, aMessage):
         pad = '\t'
         QtWidgets.QMessageBox.warning(self, "Warning!", aMessage + pad)
-    
+
     #-------- ACTIONS ----------
     def loadDir(self):
         pass
-            
+
     def getErrorDialog(self, text, infoText, detailedText):
         dlg = QtWidgets.QMessageBox(self)
         dlg.setIcon(QtWidgets.QMessageBox.Warning)
@@ -210,7 +214,7 @@ class MainFrame(QtWidgets.QMainWindow):
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
         return dlg
-    
+
     def getMessageDialog(self, text, infoText):
         # dlg = DialogBox(self)
         dlg = QtWidgets.QMessageBox(self)
@@ -240,7 +244,7 @@ if __name__ == '__main__':
     logging.basicConfig(
             filename=logfile,
             filemode='a',
-            level=logging.ERROR,
+            level=logging.DEBUG,
             format=DEBUG_FORMAT)
 
     app = QApplication(argv)

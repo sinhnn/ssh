@@ -1,0 +1,4 @@
+{
+	"name" : "Server log",
+	"value"  : "tail --lines=5 ~/.ytv/log.txt"
+}

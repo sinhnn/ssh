@@ -1,0 +1,2 @@
+DISPLAY=:1 xsel -cb
+DISPLAY=:1 xdotool mousemove 734 454 click 1

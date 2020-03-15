@@ -96,12 +96,14 @@ class ComboBoxModel(QtCore.QAbstractItemModel):
 
 
 class ObjectsTableModel(QtCore.QAbstractTableModel):
+    fupate = QtCore.pyqtSignal(QtCore.QModelIndex)
+
     def __init__(self, data, **kwargs):
         super(ObjectsTableModel, self).__init__(**kwargs)
-        self._header = []
+        self._header = ['hostname', 'lastcmd', 'msg', 'error']
         self._data = data
-        self.__update_header__()
-        # self.__check_update__()
+        # self.__update_header__()
+        self.__check_update__()
 
     def __update_header__(self):
         for item in self._data:
@@ -112,23 +114,29 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
             if k not in self._header:
                 self._header.append(k)
 
-    # def __check_update__(self):
-        # threads = []
-        # for t in [self._dataChanged]:
-            # threads.append(threading.Thread(target=t))
-            # threads[-1].daemon=True
-            # threads[-1].start()
+    def __check_update__(self):
+        threads = []
+        for t in [self._dataChanged]:
+            threads.append(threading.Thread(target=t))
+            threads[-1].daemon=True
+            threads[-1].start()
 
-    # def _dataChanged(self):
-        # while True:
-            # for i, c in enumerate(self._data):
-                # for info in c.changed:
-                    # if info not in self._header: continue
-                    # index = self.createIndex(i, self._header.index(info))
+    def _dataChanged(self):
+        while True:
+            for i, c in enumerate(self._data):
+                for info in c.changed:
+                    if info not in self._header:
+                        continue
+                    # index = self.createIndex(i, 0)
+                    # index2 = self.createIndex(i, self.columnCount())
+                    index3 = self.createIndex(i, self._header.index(info))
+                    self.dataChanged.emit(index3, index3, [])
+                    try:
+                        self.fupate.emit(index3)
+                    except AttributeError:
+                        pass
                     # c.changed.remove(info)
-                    # self.dataChanged.emit(index,index, [Qt.EditRole, Qt.DisplayRole])
-                    # self.dataChanged.emit(index,index, [])
-            # time.sleep(1)
+            time.sleep(0.1)
 
     def rowCount(self, parent=QModelIndex()): 
         return len(self._data)
@@ -150,7 +158,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                 return self._header[section]
             elif orientation == Qt.Vertical:
                 return section + 1
-    
+
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
             logging.debug("invalid index")
