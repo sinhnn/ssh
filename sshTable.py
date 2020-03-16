@@ -193,9 +193,9 @@ class SSHTable(QTableView):
         w = self.parent().width()
         h = self.parent().height()
         self.setColumnWidth(0, min(100, int(w*0.1)))
-        self.setColumnWidth(1, min(300, int(w*0.3)))
+        self.setColumnWidth(1, max(300, int(w*0.4)))
         self.setColumnWidth(2, min(100, int(w*0.1)))
-        self.setColumnWidth(3, int(w*0.3))
+        self.setColumnWidth(3, int(w*0.2))
         # self.setColumnWidth(1, int(w*0.4))
         # self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
@@ -212,6 +212,7 @@ class SSHTable(QTableView):
             'download': self.download,
             'backup': self.backup,
             'install_sshkey': self.install_sshkey,
+            'copy_tunnel_cmd': self.copy_tunnel_cmd,
             'open_log': self.open_log,
         }
 
@@ -323,6 +324,12 @@ class SSHTable(QTableView):
                     os.startfile(str(item.get('filepath')))
                 except Exception as e:
                     logging.error('unable to open {}'.format(item.get('filepath')))
+
+    def copy_tunnel_cmd(self):
+        cmds = [item.ssh_tunnel_cmd() for item in self.selectedItems()]
+        cb = QApplication.clipboard()
+        cb.clear(mode=cb.Clipboard)
+        cb.setText("\n".join(cmds), mode=cb.Clipboard)
 
 
     def move_to_trash(self):
@@ -443,6 +450,7 @@ class SSHWidget(QtWidgets.QWidget):
             item = model.itemAtRow(i)
             hide = pattern not in str(item)
             self.tableview.setRowHidden(i, hide )
+
 
 
 def main():

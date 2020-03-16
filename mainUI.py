@@ -246,6 +246,7 @@ if __name__ == '__main__':
             filemode='a',
             level=logging.DEBUG,
             format=DEBUG_FORMAT)
+    logging.propagate = True
 
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())

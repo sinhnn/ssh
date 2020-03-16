@@ -279,7 +279,7 @@ class SSHClient(object):
                 name='lastcmd',
                 file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
                 parent=self),
-            'log': FakeStdOut(
+            'ytvlog': FakeStdOut(
                 name='ytvlog',
                 file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
                 parent=self),
@@ -353,7 +353,7 @@ class SSHClient(object):
     def getLog(self, path='~/.ytv/log.txt'):
         cmd = 'tail --lines=1 {}'.format(path)
         (rcmd, out, err) = self.exec_command(cmd)
-        self.status['log'].write(''.join(out + err))
+        self.status['ytvlog'].write(''.join(out + err))
         # if 'log' not in self.changed:
             # self.changed.append('log')
 
@@ -692,6 +692,12 @@ class SSHClient(object):
     def cmdline(self):
         args = [CMD]
         args.extend(self.__base_opt__())
+        return ' '.join(args)
+
+    def ssh_tunnel_cmd(self):
+        args = [CMD]
+        args.extend(self.__base_opt__())
+        args.extend(['-C2qTnN', '-D', str(22000)])
         return ' '.join(args)
 
     def __base_opt_scp__(self):
