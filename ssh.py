@@ -351,7 +351,7 @@ class SSHClient(object):
             logging.error(e, exc_info=True)
 
     def getLog(self, path='~/.ytv/log.txt'):
-        cmd = 'pgrep ytv; tail --lines=1 {}'.format(path)
+        cmd = 'tail --lines=1 {}'.format(path)
         (rcmd, out, err) = self.exec_command(cmd)
         self.status['log'].write(''.join(out + err))
         # if 'log' not in self.changed:
