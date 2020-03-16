@@ -372,8 +372,8 @@ class SSHWidget(QtWidgets.QWidget):
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         splitter.addWidget(self.tableview)
         splitter.addWidget(self.tasklistview)
-        splitter.setStretchFactor(0, 1);
-        splitter.setStretchFactor(1, 0);
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
 
         layout.addWidget(optW)
         layout.addWidget(splitter)
@@ -400,7 +400,6 @@ class SSHWidget(QtWidgets.QWidget):
         layout.addWidget(clearJobButton)
         return widget
 
-
     def refreshTaskList(self):
         while (True):
             # self.tasklistview.update()
@@ -419,9 +418,16 @@ class SSHWidget(QtWidgets.QWidget):
                     ))
             time.sleep(1)
 
+    def refreshLog(self):
+        while(True):
+            model = self.tableview.model()
+            for i in range(0, model.rowCount()):
+                model.itemAtRow(i).getLog()
+            time.sleep(1)
+
     def daemon(self):
-        threads = []
-        for t in [self.refreshTaskList]:
+        # threads = []
+        for t in [self.refreshTaskList, self.refreshLog]:
             t = threading.Thread(target=t)
             t.daemon = True
             t.start()

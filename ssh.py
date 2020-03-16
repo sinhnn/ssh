@@ -277,18 +277,21 @@ class SSHClient(object):
         self.status = {
             'lastcmd': FakeStdOut(
                 name='lastcmd',
-                file_='', #os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                parent=self),
+            'log': FakeStdOut(
+                name='ytvlog',
+                file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
                 parent=self),
             'msg': FakeStdOut(
                 name='msg',
-                file_='', #os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
                 parent=self),
             'error': FakeStdOut(
                 name='error',
-                file_='', #os.path.join(__CACHE__, '{}.stderr.txt'.format(self.get('hostname'))),
+                file_='',  # os.path.join(__CACHE__, '{}.stderr.txt'.format(self.get('hostname'))),
                 parent=self)
         }
-
 
         self.tunnels = []
         self.tunnel_proc = []
@@ -346,6 +349,13 @@ class SSHClient(object):
         except Exception as e:
             self.logger = logging
             logging.error(e, exc_info=True)
+
+    def getLog(self, path='~/.ytv/log.txt'):
+        cmd = 'pgrep ytv; tail --lines=1 log.txt'
+        (rcmd, out, err) = self.exec_command(cmd)
+        self.status['log'].write(''.join(out + err))
+        # if 'log' not in self.changed:
+            # self.changed.append('log')
 
     def __str__(self):
         return '{}\n{}'.format(
