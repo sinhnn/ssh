@@ -16,8 +16,8 @@ class RemoteFile(object):
 
         """
         self._parent = parent
-        self._remote_path = remote_path
-        self._local_path = local_path
+        self.remote_path = remote_path
+        self.local_path = local_path
 
     def download(self):
         r = self._parent.download_by_subprocess(

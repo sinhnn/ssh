@@ -194,7 +194,7 @@ class SSHTable(QTableView):
         h = self.parent().height()
         n = float(0.9 / self.model().columnCount())
         self.setColumnWidth(0, min(100, int(w*0.1)))
-        for i in range(1, n-1):
+        for i in range(1, self.model().columnCount() - 1):
             self.setColumnWidth(1, min(300, int(w*n)))
         # self.setColumnWidth(2, min(100, int(w*n)))
         # self.setColumnWidth(3, int(w*0.2))
