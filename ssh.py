@@ -325,7 +325,7 @@ class SSHClient(object):
 
         self.__failedConnect__ = 0
         self.create_data_dir()
-        self.update_server_info()
+        # self.update_server_info()
 
     def create_data_dir(self):
         try:
@@ -340,7 +340,7 @@ class SSHClient(object):
     def update_server_info(self):
         remote_path = [v.dst_path for k, v in self.encrypted.items()]
         for k, v in self.encrypted.items():
-            self.scp_by_subprocess(
+            self.download_by_subprocess(
                 src_path=remote_path,
                 dst_path=self.cached_path()
             )
