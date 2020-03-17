@@ -48,10 +48,10 @@ class EncryptedRemoteFile(RemoteFile):
     def __str__(self):
         if os.path.isdir(self._local_path):
             fpath = os.path.join(
-                    self._local_path,
-                    os.path.basename(self._remote_path))
+                    self.local_path,
+                    os.path.basename(self.remote_path))
         else:
-            fpath = self._local_path
+            fpath = self.local_path
         return crypt.decryptFile(fpath)
 
     def __dict__(self):
