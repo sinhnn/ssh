@@ -338,7 +338,7 @@ class SSHClient(object):
         return False
 
     def update_server_info(self):
-        remote_path = [v.dst_path for k, v in self.encrypted.items()]
+        remote_path = [v.remote_path for k, v in self.encrypted.items()]
         for k, v in self.encrypted.items():
             self.download_by_subprocess(
                 src_path=remote_path,

@@ -192,10 +192,12 @@ class SSHTable(QTableView):
     def updateGeometry(self):
         w = self.parent().width()
         h = self.parent().height()
+        n = float(0.9 / self.model().columnCount())
         self.setColumnWidth(0, min(100, int(w*0.1)))
-        self.setColumnWidth(1, max(300, int(w*0.4)))
-        self.setColumnWidth(2, min(100, int(w*0.1)))
-        self.setColumnWidth(3, int(w*0.2))
+        for i in range(1, n-1):
+            self.setColumnWidth(1, min(300, int(w*n)))
+        # self.setColumnWidth(2, min(100, int(w*n)))
+        # self.setColumnWidth(3, int(w*0.2))
         # self.setColumnWidth(1, int(w*0.4))
         # self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
