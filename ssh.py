@@ -325,10 +325,11 @@ class SSHClient(object):
 
         self.__failedConnect__ = 0
         self.create_data_dir()
+        self.update_server_info()
 
     def create_data_dir(self):
         try:
-            for d in [__BACKUP__]:
+            for d in [__BACKUP__, __CACHE__]:
                 sd = os.path.join(d, self.get('hostname'))
                 os.makedirs(sd, exist_ok=True)
             return True

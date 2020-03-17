@@ -206,6 +206,7 @@ class SSHTable(QTableView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
+            'update': self.update_info,
             'command': self.exec_command,
             'edit': self.open_file,
             'upload': self.upload,
@@ -235,6 +236,12 @@ class SSHTable(QTableView):
             worker = Worker(item.open_vncviewer)
             self.tasklist.append(worker)
             self.vncviewer_threads.start(worker)
+
+    def update_info(self):
+        for item in self.selectedItems():
+            worker = Worker(item.update_server_info)
+            self.tasklist.append(worker)
+            self.threadpool.start(worker)
 
     def exec_command(self):
         dialog = ChooseCommandDialog(parent=self)
