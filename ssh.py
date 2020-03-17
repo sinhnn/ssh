@@ -23,9 +23,13 @@ import utils
 
 sshtunnel.SSH_TIMEOUT = 10.0
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
-__CACHE__ = os.path.join(__PATH__, 'cache')
-__BACKUP__ = os.path.join(__PATH__, 'BACKUP')
+__CWD__ = os.getcwd()
+__CACHE__ = os.path.join(__CWD__, 'cache')
+__BACKUP__ = os.path.join(__CWD__, 'BACKUP')
 SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'sshclient.json')
+
+# for d in [__CACHE__, __BACKUP__]:
+    # os.makedirs(d, exist_ok=True)
 
 
 __CONFIGS__ = {}
@@ -81,7 +85,6 @@ CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
 
 
-os.makedirs(__CACHE__, exist_ok=True)
 
 if platform.system() == "Windows":
     CMD = r'C:\Windows\System32\OpenSSH\ssh.exe'
@@ -266,6 +269,17 @@ class SSHClient(object):
         self.info = utils.rm_empty(info)
         self.config = self.info.get('config', {})
         self.fileConfig = fileConfig
+
+        self.storeDir = os.path.join(
+                os.path.dirname(fileConfig),
+                self.config.get('hostname')
+                )
+        self.dirs = {
+            'backup': os.path.join(self.storeDir, 'backup'),
+            'cache': os.path.join(self.storeDir, 'cache')
+        }
+        self.create_data_dir()
+
         self.id = SSHClient.NEXT_ID
         SSHClient.NEXT_ID += 1
 
@@ -293,8 +307,8 @@ class SSHClient(object):
         }
 
         self.encrypted = {
-            'update': EncryptedRemoteFile(
-                name='update',
+            'next_data': EncryptedRemoteFile(
+                name='next_data',
                 remote_path='~/.ytv/update.bin',
                 local_path=self.cached_path(),
                 parent=self),
@@ -324,36 +338,41 @@ class SSHClient(object):
         self.threads = []
 
         self.__failedConnect__ = 0
-        self.create_data_dir()
         # self.update_server_info()
 
     def create_data_dir(self):
         try:
-            for d in [__BACKUP__, __CACHE__]:
-                sd = os.path.join(d, self.get('hostname'))
-                os.makedirs(sd, exist_ok=True)
+            # for d in [__BACKUP__, __CACHE__]:
+            for k, v in self.dirs.items():
+                os.makedirs(v, exist_ok=True)
             return True
         except Exception as e:
             self.log(e, exc_info=True, level=logging.ERROR)
         return False
 
     def update_server_info(self):
-        remote_path = [v.remote_path for k, v in self.encrypted.items()]
+        remote_path = ' '.join([v.remote_path for k, v in self.encrypted.items()])
+        remote_path = '"{}"'.format(remote_path)
+        self.download_by_subprocess(
+            src_path=remote_path,
+            store=True,
+            dst_path=self.cached_path()
+        )
         for k, v in self.encrypted.items():
-            self.download_by_subprocess(
-                src_path=remote_path,
-                dst_path=self.cached_path()
-            )
+            v.decrypt()
             self.changed.append(k)
-            print(str(v))
+        return True
 
     def cached_path(self, name=None):
         if name is None:
-            return os.path.join(__CACHE__, self.get('hostname'))
-        return os.path.join(__CACHE__, self.get('hostname'), name)
+            return self.dirs['cache']
+        return os.path.join(self.dirs['cache'], name)
 
     def backup_path(self, name):
-        return os.path.join(__BACKUP__, self.get('hostname'), name)
+        if name is None:
+            return self.dirs['backup']
+
+        return os.path.join(self.dirs['backup'], name)
 
     def loadFileConfig(self, path):
         try:
@@ -438,7 +457,9 @@ class SSHClient(object):
             pass
 
     def keys(self):
-        return list(self.config.keys()) + list(self.status.keys())
+        return list(self.config.keys()) \
+                + list(self.status.keys()) \
+                + list(self.encrypted.keys())
 
     def get(self, k, default=None):
         '''get status/configuration key'''
@@ -492,6 +513,7 @@ class SSHClient(object):
             return True
 
     def __del__(self):
+        print("deleting ssh client")
         try:
             self.log('closing ssh client', level=logging.DEBUG)
             for t in self.tunnels:
@@ -621,7 +643,6 @@ class SSHClient(object):
         else:
             args.append(src_path)
         args.append(dst_path)
-        print(args)
 
         returncode = self.run_processes(args, **kwargs)
         if returncode not in [0, True]:
@@ -944,7 +965,7 @@ class SSHClient(object):
             del self.status['icon']
 
     def vncscreenshot(self):
-        local_path = os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
+        local_path = self.cached_path(self.config['hostname'] + '.jpg')
         command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         if command in [False, None]:
             delete_file(local_path)
@@ -961,7 +982,7 @@ class SSHClient(object):
             self.__delete_icon__()
 
     def vncscreenshot_subprocess(self):
-        local_path = os.path.join(__CACHE__, self.config['hostname'] + '.jpg')
+        local_path = self.cached_path(self.config['hostname'] + '.jpg')
         (command, out, err) = self.exec_command(CMD_SCREENSHOT, log=False)
 
         msg = "giblib error: Can't open X display. It *is* running, yeah?\n"
@@ -990,7 +1011,7 @@ class SSHClient(object):
             self.exec_command(CMD_INSTALL_REQUIREMENT)
         return c
 
-    def backup(self, dst_path, new=True, tries=3):
+    def backup(self, dst_path=None, new=True, tries=3):
         if new:
             files = ['~/.ytv', '~/.config/google-chrome']
             cmd = 'tar -zcvf ~/backup.tar.gz {}'.format(' '.join(files))
@@ -999,14 +1020,11 @@ class SSHClient(object):
                 self.log('unable to create backup file', level=logging.ERROR)
                 self.backup(dst_path=dst_path, new=True, tries=tries-1)
 
-        dst_file = os.path.join(
-                dst_path,
-                self.get('hostname'),
-                '{}.tar.gz'.format(self.get('hostname')))
-        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+        if dst_path is None:
+            dst_path = self.backup_path()
         r = self.download_by_subprocess(
                 src_path='~/backup.tar.gz',
-                dst_path=dst_file,
+                dst_path=dst_path,
                 store=True)
         return r
 

@@ -7,6 +7,10 @@ bufferSize = 64 * 1024
 password = "ryar$r!aYB8?=)"
 
 
+def encryptFile(ifile, ofile, password=password, bufferSize=bufferSize):
+    pyAesCrypt.encryptFile(ifile, ofile, password, bufferSize)
+
+
 def encrypt(s, password=password):
     bufferSize = 64 * 1024
     fIn = io.BytesIO(s.encode('utf-8'))

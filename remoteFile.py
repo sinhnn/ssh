@@ -26,9 +26,6 @@ class RemoteFile(object):
         )
         return r
 
-    def update(self):
-        return self.download()
-
 
 class EncryptedRemoteFile(RemoteFile):
 
@@ -44,15 +41,28 @@ class EncryptedRemoteFile(RemoteFile):
         """
         RemoteFile.__init__(self, parent, remote_path, local_path)
         self._parent = parent
+        self.data = ''
 
     def __str__(self):
-        if os.path.isdir(self._local_path):
-            fpath = os.path.join(
-                    self.local_path,
-                    os.path.basename(self.remote_path))
-        else:
-            fpath = self.local_path
-        return crypt.decryptFile(fpath)
+        return self.data
+
+    def decrypt(self):
+        try:
+            if os.path.isdir(self.local_path):
+                fpath = os.path.join(
+                        self.local_path,
+                        os.path.basename(self.remote_path))
+            else:
+                fpath = self.local_path
+            if not os.path.isfile('{}.txt'):
+                data = crypt.decryptFile(fpath)
+                open('{}.txt'.format(fpath), 'w', encoding='utf-8').write(data)
+            else:
+                data = open('{}.txt'.format(fpath), 'r').read()
+            self.data = data
+        except IOError:
+            self.data = 'None'
+        return self.data
 
     def __dict__(self):
         return json.dumps(self.__str__())

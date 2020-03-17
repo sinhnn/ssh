@@ -100,7 +100,15 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
 
     def __init__(self, data, **kwargs):
         super(ObjectsTableModel, self).__init__(**kwargs)
-        self._header = ['hostname', 'data', 'update', 'emai', 'ytvlog', 'lastcmd', 'msg', 'error']
+        self._header = [
+                'hostname',
+                'data',
+                'next_data',
+                'email',
+                'ytvlog',
+                'lastcmd',
+                'msg',
+                'error']
         self._data = data
         # self.__update_header__()
         self.__check_update__()
@@ -135,7 +143,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                         self.fupate.emit(index3)
                     except AttributeError:
                         pass
-                    # c.changed.remove(info)
+                    c.changed.remove(info)
             time.sleep(0.1)
 
     def rowCount(self, parent=QModelIndex()): 
@@ -170,7 +178,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
             return QVariant()
         elif role in [Qt.DisplayRole, Qt.EditRole]:
             try:
-                value = self._data[index.row()].get(self.headername(index))
+                value = self._data[index.row()].get(self.headername(index), '')
                 return str(value)
             except Exception as e:
                 return ''
@@ -228,7 +236,13 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
     def sort(self, col, order):
         try:
             self.layoutAboutToBeChanged.emit()
-            self._data.sort(key=lambda item : item.get(self._header[col]),  reverse=not order)
+            self._data.sort(key=lambda item : item.get(self._header[col], ''),  reverse=not order)
             self.layoutChanged.emit()
         except Exception as e:
             logging.error(e, exc_info=True)
+
+    def removeItem(self, item):
+        row = self.__data__.index(item)
+        self.beginRemoveRows(QtCore.QModelIndex(), row, row)
+        self.__data__.remove(item)
+        self.endRemoveRows()

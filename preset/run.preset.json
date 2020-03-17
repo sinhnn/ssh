@@ -1,4 +1,4 @@
 {
 	"name" : "RUN YTV",
-	"value"  : "DISPLAY=:1 ~/ytv/ytv ~/.ytv/data.bin --debug --configfile=~/.ytv/config"
+	"value"  : "DISPLAY=:1 ~/ytv/ytv ~/.ytv/data.bin --debug --configfile=~/.ytv/config &"
 }

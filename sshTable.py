@@ -24,7 +24,9 @@ from ObjectsTableModel import (
 import random
 
 import ssh
+import crypt
 from sshDialogForm import SSHInputDialog, SCPDialog
+from urlDialog import URLForm
 from simplelistmodel import QObjectListModel
 from worker import Worker
 
@@ -82,7 +84,7 @@ class ChooseCommandDialog(QtWidgets.QDialog):
         self.command.setText(item['value'])
 
     def __load_preset__ (self):
-        results=  []
+        results = []
         for entry in os.scandir(ChooseCommandDialog.__PRESET_CMD_DIR__):
             if entry.is_dir() :
                 continue
@@ -182,12 +184,14 @@ class SSHTable(QTableView):
         # self.setColumnWidth(0,60
         # self.setColumnWidth(1,100)
         # self.setColumnWidth(2,300)
-        self.horizontalHeader().setStretchLastSection(True);
+        self.horizontalHeader().setStretchLastSection(True)
         self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        # self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
         # tm = MyTableModel(data=self.data)
         # self.setModel(tm)
         self.setSortingEnabled(True)
+        self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
     def updateGeometry(self):
         w = self.parent().width()
@@ -199,8 +203,8 @@ class SSHTable(QTableView):
         # self.setColumnWidth(2, min(100, int(w*n)))
         # self.setColumnWidth(3, int(w*0.2))
         # self.setColumnWidth(1, int(w*0.4))
-        # self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        # self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
 
 
     def contextMenuEvent(self, event):
@@ -208,7 +212,9 @@ class SSHTable(QTableView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
-            'update': self.update_info,
+            'open_folder': self.open_folder,
+            'update_url': self.update_url,
+            'update_server_info': self.update_info,
             'command': self.exec_command,
             'edit': self.open_file,
             'upload': self.upload,
@@ -217,6 +223,7 @@ class SSHTable(QTableView):
             'install_sshkey': self.install_sshkey,
             'copy_tunnel_cmd': self.copy_tunnel_cmd,
             'open_log': self.open_log,
+            'move_to_trash': self.move_to_trash,
         }
 
         for k, v in self.actions.items():
@@ -231,7 +238,8 @@ class SSHTable(QTableView):
         return self.model().itemAtRow(row)
 
     def selectedItems(self):
-        return [self.model().itemAtRow(i.row()) for i in self.selectedIndexes()]
+        allrows = list(set([i.row() for i in self.selectedIndexes()]))
+        return [self.model().itemAtRow(i) for i in allrows]
 
     def open_vncviewer(self):
         for item in self.selectedItems():
@@ -239,11 +247,36 @@ class SSHTable(QTableView):
             self.tasklist.append(worker)
             self.vncviewer_threads.start(worker)
 
+    def update_url(self):
+        dl = URLForm(self)
+        r = dl.getResult()
+        if not r:
+            return
+        msg = "Are you sure you want to update new url?\n"
+        msg += json.dumps(r, indent=2)
+        reply = QtWidgets.QMessageBox.question(
+                self,
+                'Message',
+                msg,
+                QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        # Encode to file
+        dl = QtWidgets.QFileDialog.getSaveFileName(self, 'Save File')
+        if not dl:
+            return
+        d = {'urls': r}
+        with open(dl[0] + '.txt', 'w') as fp:
+            json.dump(d, fp)
+        crypt.encryptFile(dl[0] + '.txt', dl[0])
+
     def update_info(self):
         for item in self.selectedItems():
             worker = Worker(item.update_server_info)
             self.tasklist.append(worker)
-            self.threadpool.start(worker)
+            self.scp_pool.start(worker)
 
     def exec_command(self):
         dialog = ChooseCommandDialog(parent=self)
@@ -261,6 +294,12 @@ class SSHTable(QTableView):
             worker = Worker(item.invoke_shell)
             # self.tasklist.append(worker)
             self.terminal_threads.start(worker)
+
+    def open_folder(self):
+        for item in self.selectedItems():
+            worker = Worker(os.startfile, item.storeDir)
+            self.tasklist.append(worker)
+            self.threadpool.start(worker)
 
     def open_log(self):
         for item in self.selectedItems():
@@ -368,12 +407,13 @@ class SSHWidget(QtWidgets.QWidget):
             self.data = load_ssh_dir(dir)
             self.dir = dir
 
+        self.refresh_pool = QtCore.QThreadPool()
+        self.refresh_pool.setMaxThreadCount(5)
         self.initUI()
         self.daemon()
 
     def initUI(self):
         layout = QtWidgets.QVBoxLayout()
-
 
         self.tasklist = QObjectListModel(self)
         self.tasklistview = QtWidgets.QListView(self)
@@ -439,11 +479,20 @@ class SSHWidget(QtWidgets.QWidget):
         while(True):
             model = self.tableview.model()
             for i in range(0, model.rowCount()):
-                model.itemAtRow(i).getLog()
-            time.sleep(1)
+                try:
+                    item = model.itemAtRow(i)
+                    worker = Worker(item.getLog)
+                    self.refresh_pool.start(worker)
+                    # model.itemAtRow(i).getLog()
+                except Exception as e:
+                    print([str(model.itemAtRow(ii)) for ii in range(model.rowCount())])
+                    logging.error('unable to get log at item {}'.format(i))
+                    logging.error(e, exc_info=True)
+            time.sleep(5)
 
     def daemon(self):
         # threads = []
+        # for t in [self.refreshTaskList, self.refreshLog]:
         for t in [self.refreshTaskList, self.refreshLog]:
             t = threading.Thread(target=t)
             t.daemon = True
