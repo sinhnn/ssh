@@ -100,7 +100,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
 
     def __init__(self, data, **kwargs):
         super(ObjectsTableModel, self).__init__(**kwargs)
-        self._header = ['hostname', 'ytvlog', 'lastcmd', 'msg', 'error']
+        self._header = ['hostname', 'data', 'update', 'emai', 'ytvlog', 'lastcmd', 'msg', 'error']
         self._data = data
         # self.__update_header__()
         self.__check_update__()

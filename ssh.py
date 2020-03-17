@@ -16,8 +16,9 @@ from scp import SCPClient, SCPException
 import collections
 
 # My packages
-from port import PortScanner
 # import common
+from port import PortScanner
+from remoteFile import EncryptedRemoteFile
 import utils
 
 sshtunnel.SSH_TIMEOUT = 10.0
@@ -152,9 +153,6 @@ class FakeStdOut(object):
 
     def __ge__(self, other):
         return str(self) >= str(other)
-        pass
-
-    def __cmp__(self, other):
         pass
 
 
@@ -294,6 +292,24 @@ class SSHClient(object):
                 parent=self)
         }
 
+        self.encrypted = {
+            'update': EncryptedRemoteFile(
+                name='update',
+                remote_path='~/.ytv/update.bin',
+                local_path=self.cached_path(),
+                parent=self),
+            'email': EncryptedRemoteFile(
+                name='email',
+                remote_path='~/.ytv/email.bin',
+                local_path=self.cached_path(),
+                parent=self),
+            'data': EncryptedRemoteFile(
+                name='data',
+                remote_path='~/.ytv/data.bin',
+                local_path=self.cached_path(),
+                parent=self)
+        }
+
         self.tunnels = []
         self.tunnel_proc = []
 
@@ -320,7 +336,18 @@ class SSHClient(object):
             self.log(e, exc_info=True, level=logging.ERROR)
         return False
 
-    def cached_path(self, name):
+    def update_server_info(self):
+        remote_path = [v.dst_path for k, v in self.encrypted.items()]
+        for k, v in self.encrypted.items():
+            self.scp_by_subprocess(
+                src_path=remote_path,
+                dst_path=self.cached_path()
+            )
+            self.changed.append(v['name'])
+
+    def cached_path(self, name=None):
+        if name is None:
+            return os.path.join(__CACHE__, self.get('hostname'))
         return os.path.join(__CACHE__, self.get('hostname'), name)
 
     def backup_path(self, name):
@@ -372,8 +399,6 @@ class SSHClient(object):
         cmd = 'tail --lines=1 {}'.format(path)
         (rcmd, out, err) = self.exec_command(cmd)
         self.status['ytvlog'].write(''.join(out + err))
-        # if 'log' not in self.changed:
-            # self.changed.append('log')
 
     def __str__(self):
         return '{}\n{}'.format(
@@ -775,7 +800,7 @@ class SSHClient(object):
             return (False, [], [])
 
         if re.search(r'&\s*$', command):
-            command  = re.sub(r'&\s*$', '', command)
+            command = re.sub(r'&\s*$', '', command)
             background = True
 
         cid = self.exec_command_cid
@@ -793,7 +818,7 @@ class SSHClient(object):
             self.status['lastcmd'].write(command)
             self.status['msg'].write(command)
 
-        if background == True:
+        if background is True:
             self.status['msg'].write("run in background")
             client.close()
             self.__rm_exec_command_list_id__(cid)
@@ -813,13 +838,13 @@ class SSHClient(object):
                     stdin.flush()
                 if len(out):
                     i = 0
-                    self.log("{}\n{}".format( command, ''.join(out)))
+                    self.log("{}\n{}".format(command, ''.join(out)))
 
                 err = stderr.readlines()
                 r_err.extend(err)
                 if len(err):
                     i = 0
-                    self.log("{}\n{}".format( command, ''.join(err)), level=logging.ERROR)
+                    self.log("{}\n{}".format(command, ''.join(err)), level=logging.ERROR)
 
                 if store:
                     if len(out):
