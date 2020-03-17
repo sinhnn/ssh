@@ -23,6 +23,7 @@ import utils
 sshtunnel.SSH_TIMEOUT = 10.0
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __CACHE__ = os.path.join(__PATH__, 'cache')
+__BACKUP__ = os.path.join(__PATH__, 'BACKUP')
 SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'sshclient.json')
 
 
@@ -110,7 +111,8 @@ def delete_file(path):
 
 
 def progress(filename, size, sent):
-    sys.stdout.write("%s\'s progress: %.2f%%   \r" % (filename, float(sent)/float(size)*100) )
+    sys.stdout.write("%s\'s progress: %.2f%%   \r" % (filename, float(sent)/float(size)*100))
+
 
 class FakeStdOut(object):
     def __init__(self, name, file_, maxlen=10, parent=None):
@@ -124,7 +126,7 @@ class FakeStdOut(object):
     def __str__(self):
         try:
             return str(self.__records__[0])
-        except Exception as e:
+        except Exception:
             return ""
 
     def write(self, str):
@@ -135,26 +137,25 @@ class FakeStdOut(object):
 
     def __eq__(self, other):
         return str(self) == str(other)
-    
+
     def __ne__(self, other):
         return not self.__eq__(other)
-    
+
     def __lt__(self, other):
         return str(self) < str(other)
-    
+
     def __le__(self, other):
         return str(self) <= str(other)
-    
+
     def __gt__(self, other):
         return str(self) > str(other)
-    
+
     def __ge__(self, other):
         return str(self) >= str(other)
         pass
-    
+
     def __cmp__(self, other):
         pass
-
 
 
 class StoredLoggerHandler(logging.FileHandler):
@@ -277,19 +278,19 @@ class SSHClient(object):
         self.status = {
             'lastcmd': FakeStdOut(
                 name='lastcmd',
-                file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                file_=self.cached_path('lastcmd'),
                 parent=self),
             'ytvlog': FakeStdOut(
                 name='ytvlog',
-                file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                file_=self.cached_path('ytvlog'),
                 parent=self),
             'msg': FakeStdOut(
                 name='msg',
-                file_='',  # os.path.join(__CACHE__, '{}.stdout.txt'.format(self.get('hostname'))),
+                file_=self.cached_path('msg'),
                 parent=self),
             'error': FakeStdOut(
                 name='error',
-                file_='',  # os.path.join(__CACHE__, '{}.stderr.txt'.format(self.get('hostname'))),
+                file_=self.cached_path('error'),
                 parent=self)
         }
 
@@ -307,6 +308,23 @@ class SSHClient(object):
         self.threads = []
 
         self.__failedConnect__ = 0
+        self.create_data_dir()
+
+    def create_data_dir(self):
+        try:
+            for d in [__BACKUP__]:
+                sd = os.path.join(d, self.get('hostname'))
+                os.makedirs(sd, exist_ok=True)
+            return True
+        except Exception as e:
+            self.log(e, exc_info=True, level=logging.ERROR)
+        return False
+
+    def cached_path(self, name):
+        return os.path.join(__CACHE__, self.get('hostname'), name)
+
+    def backup_path(self, name):
+        return os.path.join(__BACKUP__, self.get('hostname'), name)
 
     def loadFileConfig(self, path):
         try:
@@ -371,6 +389,7 @@ class SSHClient(object):
 
     def log(self, s, level=logging.INFO, **kwargs):
         try:
+            s = s.encode('utf-8', 'ignore').decode('utf-8')
             text = '{}@{} {}'.format(
                     self.config.get('username'),
                     self.config.get('hostname'),
