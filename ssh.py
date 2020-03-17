@@ -345,6 +345,7 @@ class SSHClient(object):
                 dst_path=self.cached_path()
             )
             self.changed.append(k)
+            print(str(v))
 
     def cached_path(self, name=None):
         if name is None:
@@ -447,6 +448,8 @@ class SSHClient(object):
             return self.status[k]
         elif k in self.info.keys():
             return self.info[k]
+        elif k in self.encrypted.keys():
+            return self.encrypted[k]
         return default
 
     def update(self, k, v):
