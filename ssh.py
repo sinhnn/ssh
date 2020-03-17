@@ -344,7 +344,7 @@ class SSHClient(object):
                 src_path=remote_path,
                 dst_path=self.cached_path()
             )
-            self.changed.append(v['name'])
+            self.changed.append(k)
 
     def cached_path(self, name=None):
         if name is None:
@@ -618,6 +618,7 @@ class SSHClient(object):
         else:
             args.append(src_path)
         args.append(dst_path)
+        print(args)
 
         returncode = self.run_processes(args, **kwargs)
         if returncode not in [0, True]:
