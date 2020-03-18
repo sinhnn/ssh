@@ -1,38 +1,47 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-#  ObjectList2TableModel.py Author "sinhnn <sinhnn.92@gmail.com>" Date 16.12.2019
+# Author "sinhnn <sinhnn.92@gmail.com>" Date 16.12.2019
 
-import sys, re, os
+import sys
+import re
+import os
 import time
 import threading
 import subprocess
 import json
 import logging
+
 from PyQt5.QtWidgets import (
-        QMainWindow, QApplication, QWidget,
-        QAction, QTableView,QVBoxLayout, QAbstractItemView, QMenu,
+        QApplication,
+        QTableView,
+        QMenu,
 )
 
-from PyQt5.QtGui import QIcon
+# from PyQt5.QtGui import QIcon
 from PyQt5 import QtGui, QtCore, QtWidgets
-from PyQt5.QtCore import pyqtSlot
+# from PyQt5.QtCore import pyqtSlot
 from ObjectsTableModel import (
         ObjectsTableModel as MyTableModel,
         ComboBoxModel,
         )
 
-import random
+# import random
 
+# =============================================================================
 import ssh
 import crypt
-from sshDialogForm import SSHInputDialog, SCPDialog
+from sshDialogForm import SCPDialog
 from urlDialog import URLForm
 from simplelistmodel import QObjectListModel
 from worker import Worker
+# =============================================================================
 
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
+
+
 class ChooseCommandDialog(QtWidgets.QDialog):
     __PRESET_CMD_DIR__ = os.path.join(__PATH__, 'preset')
+
     def __init__(self, parent, **kwargs):
         QtWidgets.QDialog.__init__(self, **kwargs)
         self.setWindowTitle("Choose command")
@@ -41,7 +50,8 @@ class ChooseCommandDialog(QtWidgets.QDialog):
 
     def initUI(self):
         layout = QtWidgets.QGridLayout()
-        self.buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.buttonBox = QtWidgets.QDialogButtonBox(
+                QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
@@ -52,15 +62,15 @@ class ChooseCommandDialog(QtWidgets.QDialog):
         self.presetBox.setModel(presetBoxModel)
         self.presetBox.currentIndexChanged.connect(self.__show_preset_value__)
 
-        self.browser = QtWidgets.QPushButton("Browser",self)
+        self.browser = QtWidgets.QPushButton("Browser", self)
         self.browser.clicked.connect(self.__browser__)
 
         layout.addWidget(self.command, 0, 0, 2, 2)
         layout.addWidget(self.presetBox, 2, 0)
         layout.addWidget(self.browser, 2, 1)
-        layout.addWidget(self.buttonBox, 3,0)
-        layout.setColumnStretch(0,1)
-        layout.setRowStretch(0,1)
+        layout.addWidget(self.buttonBox, 3, 0)
+        layout.setColumnStretch(0, 1)
+        layout.setRowStretch(0, 1)
 
         self.setMinimumWidth(600)
         self.setLayout(layout)
@@ -76,23 +86,25 @@ class ChooseCommandDialog(QtWidgets.QDialog):
         dialog = QtWidgets.QFileDialog(self)
         dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
         files, _ = dialog.getOpenFileNames(self, 'Shell script file')
-        if not files: return
+        if not files:
+            return
         self.command.setText(files[0])
 
     def __show_preset_value__(self, index):
         item = self.presetBox.model().itemAtRow(index)
         self.command.setText(item['value'])
 
-    def __load_preset__ (self):
+    def __load_preset__(self):
         results = []
         for entry in os.scandir(ChooseCommandDialog.__PRESET_CMD_DIR__):
-            if entry.is_dir() :
+            if entry.is_dir():
                 continue
             if not re.search(r'.preset.json$', entry.name):
                 continue
 
             command = self.__load_preset_file__(entry.path)
-            if command: results.append(command)
+            if command:
+                results.append(command)
         return results
 
     def __load_preset_file__(self, path):
@@ -105,14 +117,15 @@ class ChooseCommandDialog(QtWidgets.QDialog):
                 logging.error('unable to parse preset file {}'.format(path))
                 return {}
         return command
-    
 
-__SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
 
-def load_ssh_dir (dir):
-    results=  []
+__SSH_DIR__ = os.path.join(__PATH__, 'ssh')
+
+
+def load_ssh_dir(dir):
+    results = []
     for entry in os.scandir(dir):
-        if entry.is_dir() :
+        if entry.is_dir():
             continue
         if not re.search(r'.json$', entry.name):
             continue
@@ -122,7 +135,7 @@ def load_ssh_dir (dir):
             if server:
                 server.info['filepath'] = entry.path
                 results.append(server)
-        except:
+        except Exception:
             pass
     return results
 
@@ -136,23 +149,19 @@ def load_ssh_file(path):
         if client.is_valid():
             return client
         return {}
-    except Exception as e:
-        logging.error('unable to load ssh file {}\n{}'.format(path), exc_info=True)
+    except Exception:
+        logging.error('unable to load file {}\n{}'.format(path), exc_info=True)
         return {}
     # return None
+
 
 class SSHTable(QTableView):
     # def __init__(self, data=[], dir=__SSH_DIR__, **kwargs):
     def __init__(self, tasklist, parent=None, **kwargs):
         QTableView.__init__(self, parent, **kwargs)
-        # self.dir = dir
-        # self.data = data
-        # if not self.data:
-        #     self.data = load_ssh_dir(dir)
-        #     self.dir = dir
-        self.createTable()
+        self.configTable()
         self.setStyleSheet('font-family: Consolas; font-size: 8;')
-        self.setFont(QtGui.QFont("Consolas",8));
+        self.setFont(QtGui.QFont("Consolas", 8))
 
         self.tasklist = tasklist
         self.threadpool = QtCore.QThreadPool()
@@ -165,10 +174,8 @@ class SSHTable(QTableView):
         self.backup_pool = QtCore.QThreadPool()
         self.backup_pool.setMaxThreadCount(5)
 
-
         self.vncviewer_threads = QtCore.QThreadPool()
         self.vncviewer_threads.setMaxThreadCount(10)
-
 
         self.terminal_threads = QtCore.QThreadPool()
         self.terminal_threads.setMaxThreadCount(100)
@@ -178,40 +185,27 @@ class SSHTable(QTableView):
         for f in [self.threadpool, self.scp_pool, self.backup_pool]:
             f.clear()
 
-
-    def createTable(self):
-        # self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
-        # self.setColumnWidth(0,60
-        # self.setColumnWidth(1,100)
-        # self.setColumnWidth(2,300)
+    def configTable(self):
         self.horizontalHeader().setStretchLastSection(True)
         self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        # self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
-        # tm = MyTableModel(data=self.data)
-        # self.setModel(tm)
         self.setSortingEnabled(True)
         self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
     def updateGeometry(self):
         w = self.parent().width()
-        h = self.parent().height()
         n = float(0.9 / self.model().columnCount())
         self.setColumnWidth(0, min(100, int(w*0.1)))
         for i in range(1, self.model().columnCount() - 1):
             self.setColumnWidth(1, min(300, int(w*n)))
-        # self.setColumnWidth(2, min(100, int(w*n)))
-        # self.setColumnWidth(3, int(w*0.2))
-        # self.setColumnWidth(1, int(w*0.4))
         self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        # self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
-
 
     def contextMenuEvent(self, event):
         self.menu = QMenu(self)
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
+            # 'open_watch_log': lambda: self.open_terminal('watch tail --lines=10 /root/.bashrc'),
             'open_folder': self.open_folder,
             'update_url': self.update_url,
             'update_server_info': self.update_info,
@@ -231,9 +225,7 @@ class SSHTable(QTableView):
         self.menu.popup(QtGui.QCursor.pos())
         self.menu.exec_(QtGui.QCursor.pos())
 
-
     def __event2item__(self, event):
-        print(event.pos())
         row = self.rowAt(event.pos().y())
         return self.model().itemAtRow(row)
 
@@ -289,9 +281,9 @@ class SSHTable(QTableView):
             self.tasklist.append(worker)
             self.threadpool.start(worker)
 
-    def open_terminal(self):
+    def open_terminal(self, command=None):
         for item in self.selectedItems():
-            worker = Worker(item.invoke_shell)
+            worker = Worker(item.invoke_shell, command)
             # self.tasklist.append(worker)
             self.terminal_threads.start(worker)
 
@@ -353,16 +345,14 @@ class SSHTable(QTableView):
             self.tasklist.append(worker)
             self.scp_pool.start(worker)
 
-
     def install_sshkey(self):
-        text, okPressed = QtWidgets.QInputDialog.getText(
-                self,
-                "Install SSH Key", "SSHKEY", QtWidgets.QLineEdit.Normal, "")
-        key = text.strip()
-        if okPressed and key:
-            cmd = '[[ -f {0} ]] || mkdir -p ~/.ssh && touch {0} && echo "{1}" >> {0}'.format('~/.ssh/authorized_keys', key)
+        f = QtWidgets.QFileDialog.getOpenFileName(self, "Open Files")
+        if not f[0]:
+            return False
+
+        if f[0]:
             for item in self.selectedItems():
-                worker = Worker(item.exec_command, cmd)
+                worker = Worker(item.install_sshkey, f[0])
                 self.threadpool.start(worker)
 
     def open_file(self):
@@ -370,7 +360,7 @@ class SSHTable(QTableView):
             if item.get('filepath'):
                 try:
                     os.startfile(str(item.get('filepath')))
-                except Exception as e:
+                except Exception:
                     logging.error('unable to open {}'.format(item.get('filepath')))
 
     def copy_tunnel_cmd(self):
@@ -378,7 +368,6 @@ class SSHTable(QTableView):
         cb = QApplication.clipboard()
         cb.clear(mode=cb.Clipboard)
         cb.setText("\n".join(cmds), mode=cb.Clipboard)
-
 
     def move_to_trash(self):
         for item in self.selectedItems():
@@ -485,7 +474,6 @@ class SSHWidget(QtWidgets.QWidget):
                     self.refresh_pool.start(worker)
                     # model.itemAtRow(i).getLog()
                 except Exception as e:
-                    print([str(model.itemAtRow(ii)) for ii in range(model.rowCount())])
                     logging.error('unable to get log at item {}'.format(i))
                     logging.error(e, exc_info=True)
             time.sleep(5)
@@ -507,22 +495,27 @@ class SSHWidget(QtWidgets.QWidget):
         for i in range(0, model.rowCount()):
             item = model.itemAtRow(i)
             hide = pattern not in str(item)
-            self.tableview.setRowHidden(i, hide )
-
+            self.tableview.setRowHidden(i, hide)
 
 
 def main():
     import logging
     logging.basicConfig(level=logging.ERROR,
             format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
+    argv = sys.argv
+    app = QApplication(argv)
+    if len(argv) == 2:
+        print("Loading ssh clients in directory {}".format(argv[1]))
+        w = SSHWidget(dir=argv[1])
+    else:
+        w = SSHWidget()
 
-    app = QApplication(sys.argv) 
-    w = SSHWidget() 
-    w.setGeometry(0,0, 1000, 1000)
+    w.setGeometry(0, 0, 1000, 1000)
     w.tableview.updateGeometry()
-    w.show() 
+    w.show()
     sys.exit(app.exec_()) 
-	
+
+
 if __name__ == "__main__": 
     main()
 

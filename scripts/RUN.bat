@@ -15,7 +15,7 @@ REM echo user_pref("network.proxy.ftp", "127.0.0.1"); >> %~dp0\user.js
 REM echo user_pref("network.proxy.ftp_port", %PORT%); >>%~dp0\user.js
 REM echo user_pref("network.proxy.http", "127.0.0.1"); >>%~dp0\user.js
 REM echo user_pref("network.proxy.http_port", %PORT%); >>%~dp0\user.js
-echo user_pref("network.proxy.share_proxy_settings", true); >> %~dp0\firefox\user.js
+echo user_pref("network.proxy.share_proxy_settings", true); > %~dp0\firefox\user.js
 echo user_pref("network.proxy.socks", "127.0.0.1"); >> %~dp0\firefox\user.js
 echo user_pref("network.proxy.socks_port", %PORT%); >> %~dp0\firefox\user.js
 echo user_pref("media.peerconnection.enabled", false); >> %~dp0\firefox\user.js

@@ -28,10 +28,6 @@ __CACHE__ = os.path.join(__CWD__, 'cache')
 __BACKUP__ = os.path.join(__CWD__, 'BACKUP')
 SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'sshclient.json')
 
-# for d in [__CACHE__, __BACKUP__]:
-    # os.makedirs(d, exist_ok=True)
-
-
 __CONFIGS__ = {}
 if os.path.isfile(SSHCLIENT_CONFIG_FILE):
     try:
@@ -46,10 +42,7 @@ SSH_MAX_FAILED = 10
 SSH_REFRESH_CONNECTION = 200
 SSH_PUBLIC_KEY_FILE = os.path.join(__PATH__, 'id_rsa.pub')
 SSH_COMMON_OPTS = [
-    # "-v",
-    # "-o", "ConnectTimeout=10",
     "-o", "CheckHostIP=no",
-    # "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
 ]
 
@@ -85,10 +78,11 @@ CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
 
 
-
 if platform.system() == "Windows":
     CMD = r'C:\Windows\System32\OpenSSH\ssh.exe'
     SCP = r'C:\Windows\System32\OpenSSH\scp.exe'
+    RSYNC = r'rsync.exe'
+    SSHFS = r'sshfs.exe'
     VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
     VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot'))
     OPEN_IN_TERMINAL = ["cmd.exe", "/k"]
@@ -96,6 +90,8 @@ if platform.system() == "Windows":
 elif platform.system() == "Linux":
     CMD = "ssh"
     SCP = 'scp'
+    RSYNC = r'rsync'
+    SSHFS = r'sshfs'
     OPEN_IN_TERMINAL = []
     VNCVIEWER = 'vncviewer'
     VNCSNAPSHOT = 'vncsnapshot'
@@ -112,10 +108,6 @@ def intersection(l1, l2):
 def delete_file(path):
     if os.path.isfile(str(path)):
         os.remove(str(path))
-
-
-def progress(filename, size, sent):
-    sys.stdout.write("%s\'s progress: %.2f%%   \r" % (filename, float(sent)/float(size)*100))
 
 
 class FakeStdOut(object):
@@ -286,6 +278,9 @@ class SSHClient(object):
         self.initLogger()
         self.portscanner = PortScanner()
 
+
+        # online
+        # self._client = self.connect()
         self.changed = []
         self.status = {
             'lastcmd': FakeStdOut(
@@ -351,8 +346,8 @@ class SSHClient(object):
         return False
 
     def update_server_info(self):
-        remote_path = ' '.join([v.remote_path for k, v in self.encrypted.items()])
-        remote_path = '"{}"'.format(remote_path)
+        paths = ' '.join([v.remote_path for k, v in self.encrypted.items()])
+        remote_path = '"{}"'.format(paths)
         self.download_by_subprocess(
             src_path=remote_path,
             store=True,
@@ -537,7 +532,7 @@ class SSHClient(object):
             client = self.connect()
             if not client:
                 return results
-            scp = SCPClient(client.get_transport(), progress)
+            scp = SCPClient(client.get_transport())
             for f in files:
                 try:
                     r = bool(os.path.isdir(f))
@@ -647,7 +642,10 @@ class SSHClient(object):
         returncode = self.run_processes(args, **kwargs)
         if returncode not in [0, True]:
             self.log(
-                    "retry copy with code {} {} to {}".format(returncode, src_path, dst_path),
+                    "retry copy with code {} {} to {}".format(
+                        returncode,
+                        src_path,
+                        dst_path),
                     level=logging.ERROR)
             return self.scp_by_subprocess(
                     src_path=src_path,
@@ -668,9 +666,14 @@ class SSHClient(object):
 
         if store is True:
             if r in [0, True]:
-                self.status['msg'].write('{} --> {}'.format(src_path, dst_path))
+                self.status['msg'].write(
+                        '{} --> {}'.format(src_path, dst_path))
             else:
-                self.status['error'].write('[{}] - FAILED UPLOAD: {} --> {}'.format(r, src_path, dst_path))
+                self.status['error'].write(
+                    '[{}] - FAILED UPLOAD: {} --> {}'.format(
+                        r,
+                        src_path,
+                        dst_path))
         return r
 
     def __hostaddress_path__(self, path):
@@ -678,7 +681,8 @@ class SSHClient(object):
 
     def download_by_subprocess(self, src_path, dst_path, recursive=False, store=False, **kwargs):
         if store:
-            self.status['msg'].write('DOWNLOADING {} --> {}'.format(src_path, dst_path))
+            self.status['msg'].write(
+                    'DOWNLOADING {} --> {}'.format(src_path, dst_path))
         if isinstance(src_path, list):
             p = [self.__hostaddress_path__(p) for p in src_path]
         else:
@@ -689,9 +693,14 @@ class SSHClient(object):
 
         if store is True:
             if r in [0, True]:
-                self.status['msg'].write('{} --> {}'.format(src_path, dst_path))
+                self.status['msg'].write(
+                        '{} --> {}'.format(src_path, dst_path))
             else:
-                self.status['error'].write('[{}] - FAILED UPLOAD: {} --> {}'.format(r, src_path, dst_path))
+                self.status['error'].write(
+                        '[{}] - FAILED UPLOAD: {} --> {}'.format(
+                            r,
+                            src_path,
+                            dst_path))
         return r
 
     def connect(self, client=None, tries=2):
@@ -699,6 +708,7 @@ class SSHClient(object):
             return False
         if tries <= 0:
             self.__failedConnect__ += 1
+            self.__delete_icon__()
             self.log('paramiko: unable to connect', level=logging.ERROR)
             return False
 
@@ -714,7 +724,6 @@ class SSHClient(object):
                 del self.status['icon']
             return self.connect(client=client, tries=tries-1)
         except socket.timeout:
-            self.__delete_icon__()
             return self.connect(client=client, tries=tries-1)
         except paramiko.ssh_exception.SSHException:
             return self.connect(client=client, tries=tries-1)
@@ -814,14 +823,18 @@ class SSHClient(object):
                 self.exec_command_list.remove(c)
                 return
 
-    def exec_command(self, command, store=False, background=False, log=True):
+    def exec_command(self, command, new=True, store=False, background=False, log=True):
         if not self.check_failed_connection():
             return (False, [], [])
 
         if self.__is_command_in_runnning_list__(command):
             return (False, [], [])
 
-        client = self.connect()
+        if new is True:
+            client = self.connect()
+        else:
+            client = self._client
+
         if not client:
             return (False, [], [])
 
@@ -846,31 +859,42 @@ class SSHClient(object):
 
         if background is True:
             self.status['msg'].write("run in background")
-            client.close()
+            if new is True:
+                client.close()
             self.__rm_exec_command_list_id__(cid)
             return (command, [], [])
 
         r_out = []
         r_err = []
+
+        def is_done(*args):
+            return all([s.channel.exit_status_ready() for s in args])
+
         # avoid dead-loop
         i = 0
-        while not stdout.channel.exit_status_ready() and not stderr.channel.exit_status_ready() and i < 10000:
+        while (not is_done(stdout, stderr)) and i < 10000:
             try:
-                out = stdout.readlines()
-                r_out.extend(out)
-                if 'password' in ' '.join(out):
-                    self.log("fill password: {}".format(self.config['password']))
-                    stdin.write(self.config['password'] + '\n')
-                    stdin.flush()
-                if len(out):
-                    i = 0
-                    self.log("{}\n{}".format(command, ''.join(out)))
+                out = []
+                if stdout.recv_ready():
+                    out = stdout.readlines()
+                    r_out.extend(out)
+                    if 'password' in ' '.join(out):
+                        self.log("fill passwd: {}".format(self.config['password']))
+                        stdin.write(self.config['password'] + '\n')
+                        stdin.flush()
+                    if len(out):
+                        i = 0
+                        self.log("{}\n{}".format(command, ''.join(out)))
 
-                err = stderr.readlines()
-                r_err.extend(err)
-                if len(err):
-                    i = 0
-                    self.log("{}\n{}".format(command, ''.join(err)), level=logging.ERROR)
+                err = []
+                if stderr.recv_ready():
+                    err = stderr.readlines()
+                    r_err.extend(err)
+                    if len(err):
+                        i = 0
+                        self.log("{}\n{}".format(
+                            command, ''.join(err)),
+                            level=logging.ERROR)
 
                 if store:
                     if len(out):
@@ -890,14 +914,18 @@ class SSHClient(object):
             self.status['msg'].write('')
         if i >= 10000:
             self.log('timeout to execute command')
-        client.close()
+        if new is True:
+            client.close()
         self.__rm_exec_command_list_id__(cid)
         return (command, r_out, r_err)
 
-    def invoke_shell(self):
+    def invoke_shell(self, command=None):
         '''open ssh in new terminal'''
         args = OPEN_SSH_IN_TERMINAL.copy()
         args.extend(self.__base_opt__())
+        if command is not None:
+            args.append('"{}"'.format(command))
+        print(' '.join(args))
         psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
 
     def exec_file(self, file):
@@ -1027,6 +1055,19 @@ class SSHClient(object):
                 dst_path=dst_path,
                 store=True)
         return r
+
+    def install_sshkey(self, path=None):
+        if path is None:
+            path = self.get("key_filename")
+
+        if path is None:
+            return False
+        key = open(path, 'r').read()
+
+        cmd = 'mkdir -p ~/.ssh' \
+            + ' && echo -e "\n{}" >> ~/.ssh/authorized_keys'.format(key)
+        (command, out, err) = self.exec_command(cmd)
+        return cmd != command
 
     def vncserver_list(self):
         ''' Get list of vncserver on slaver '''
