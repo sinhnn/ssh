@@ -1,33 +1,33 @@
-import sys, re, os
-import json
-from PyQt5 import QtGui, QtCore, QtWidgets
+import sys
+# import re
+# import os
+# import json
+from PyQt5 import (
+        # QtGui,
+        QtCore,
+        QtWidgets
+)
 
 
 class URLWidget(QtWidgets.QWidget):
     """Docstring for URLForm. """
     def __init__(self, parent=None, **kwargs):
-        """TODO: to be defined.
-
-        :parent: TODO
-        :**kwargs: TODO
-
-        """
         QtWidgets.QWidget.__init__(self, parent, **kwargs)
         self._parent = parent
         self.UI()
 
     def UI(self):
         layout = QtWidgets.QHBoxLayout()
-        # layout.setContentsMargins(0,0,0,0)
         self.urlW = QtWidgets.QLineEdit(self)
-        self.urlW.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.urlW.setSizePolicy(
+                QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Expanding)
         self.urlW.setMinimumWidth(400)
         self.viewCountW = QtWidgets.QLineEdit(str(2), self)
         self.viewCountW.setFixedWidth(30)
         self.durationW = QtWidgets.QLineEdit(str(1800), self)
         self.durationW.setFixedWidth(30)
 
-    
         layout.addWidget(QtWidgets.QLabel("URL"))
         layout.addWidget(self.urlW)
         layout.addWidget(QtWidgets.QLabel("Count"))
@@ -48,9 +48,8 @@ class URLWidget(QtWidgets.QWidget):
         }
 
 
-
 class URLForm(QtWidgets.QDialog):
-    """docstring for URLForm"""
+    """Docstring for URLForm"""
     def __init__(self, parent=None, **kwargs):
         QtWidgets.QDialog.__init__(self, parent, **kwargs)
         self.urls = []
@@ -66,7 +65,8 @@ class URLForm(QtWidgets.QDialog):
 
         self.addW = QtWidgets.QPushButton("Add", self)
         self.addW.setFixedWidth(100)
-        self.button = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.button = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
 
         self.button.accepted.connect(self.accept)
         self.button.rejected.connect(self.reject)
@@ -75,7 +75,6 @@ class URLForm(QtWidgets.QDialog):
         self._layout.addWidget(self.addW, QtCore.Qt.AlignCenter)
         self._layout.addWidget(self.button)
         self.setLayout(self._layout)
-
 
     def add(self):
         w = URLWidget(self)
@@ -98,9 +97,9 @@ class URLForm(QtWidgets.QDialog):
             return None
         return self.__list__()
 
+
 if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv) 
-    w = URLForm() 
-    # w.show( 
+    app = QtWidgets.QApplication(sys.argv)
+    w = URLForm()
     print(w.getResult())
-    sys.exit(0) 
+    sys.exit(0)

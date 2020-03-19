@@ -7,17 +7,28 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication
 import logging
 
-from listModel import ThumbnailListViewer, ListModel
-from sshTable import SSHTable, SSHWidget
+# My modules ==================================================================
+import common
+from listModel import (
+        ThumbnailListViewer,
+        ListModel
+)
+from sshTable import (
+        # SSHTable,
+        SSHWidget,
+        load_ssh_dir
+)
 
 # from logWidget import LogWidget, PlainTextEditLogger
+__PATH__ = os.path.dirname(os.path.abspath(__file__))
+__SSH_DIR__ = os.path.join(__PATH__, 'ssh')
 
-import common
 
 def changeBackgroundColor(widget, colorString):
     widget.setAttribute(QtCore.Qt.WA_StyledBackground, True)
     style = "background-color: %s;" % colorString
     widget.setStyleSheet(style)
+
 
 def getAppIcon():
     return QtGui.QIcon('icons/computer.png')
@@ -29,14 +40,9 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds)
 
-from sshTable import load_ssh_dir
-__PATH__ = os.path.dirname(os.path.abspath(__file__))
-__SSH_DIR__ =  os.path.join(__PATH__, 'ssh')
-
 
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
-    # signalActive = pyqtSignal()
 
     def __init__(self, dir=__SSH_DIR__):
         self.dir = dir
@@ -45,15 +51,14 @@ class MainFrame(QtWidgets.QMainWindow):
         self.setWindowIcon(getAppIcon())
         self.initUI()
         self.centerWindow()
-        self.setMinimumSize(1800,1000)
-
+        self.setMinimumSize(1800, 1000)
 
     def initUI(self):
         mWidgets = QtWidgets.QWidget()
         mlayout = QtWidgets.QVBoxLayout()
 
         widgets = ThumbnailListViewer(parent=self)
-        self.models  = []
+        self.models = []
         model = ListModel(load_ssh_dir(self.dir), parent=self)
         self.models.append(model)
         widgets.setModel(model)
@@ -67,7 +72,7 @@ class MainFrame(QtWidgets.QMainWindow):
         self.search.setPlaceholderText("Enter address/tags to search")
         self.search.textChanged.connect(self.on_search)
 
-        self.scale =  QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.scale = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.scale.setMinimum(10)
         self.scale.setMaximum(100)
         self.scale.setTickInterval(10)
@@ -86,9 +91,9 @@ class MainFrame(QtWidgets.QMainWindow):
         self.sort_by.setMaximumWidth(300)
 
         self.table = SSHWidget(widgets.model().getData())
-        self.table.setMinimumSize(800,600)
+        self.table.setMinimumSize(800, 600)
         self.table.setWindowTitle('SSH Table')
-        self.setCentralWidget(mWidgets);
+        self.setCentralWidget(mWidgets)
 
         # self.exitAction = QtWidgets.QAction('Exit', self)
         # self.exitAction.setShortcut('Ctrl+Q')
@@ -109,14 +114,17 @@ class MainFrame(QtWidgets.QMainWindow):
         self.sortByStatusAction = QtWidgets.QAction('Sort by Status', self)
         self.sortByStatusAction.triggered.connect(self.on_sort_by_status)
 
-        QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+F"),
-                self).activated.connect(lambda : self.search.setFocus())
+        QtWidgets.QShortcut(
+                QtGui.QKeySequence("Ctrl+F"),
+                self).activated.connect(lambda: self.search.setFocus())
 
-        QtWidgets.QShortcut(QtGui.QKeySequence("escape"),
-                self).activated.connect(lambda : self.search.clear())
+        QtWidgets.QShortcut(
+                QtGui.QKeySequence("escape"),
+                self).activated.connect(lambda: self.search.clear())
 
         self.openSSHTableAction = QtWidgets.QAction('Open Table', self)
-        self.openSSHTableAction.triggered.connect(lambda : self.table.setVisible(True))
+        self.openSSHTableAction.triggered.connect(
+                lambda: self.table.setVisible(True))
 
         self.toolbar = self.addToolBar('Main')
         self.toolbar.addAction(self.iconViewAction)
@@ -131,12 +139,11 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addWidget(self.sort_by)
         self.toolbar.addWidget(self.sort_order_button)
         self.toolbar.addSeparator()
-                              
+
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(self.loadAction)
-        fileMenu.addSeparator();
-        # fileMenu.addAction(self.exitAction)
+        fileMenu.addSeparator()
 
         self.setWindowTitle("SSH-VNC {}".format(self.dir))
 
@@ -147,18 +154,21 @@ class MainFrame(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         common.close_all = True
         quit_msg = "Are you sure you want to exit the program?"
-        reply = QtWidgets.QMessageBox.question(self, 'Message', quit_msg,
-                QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+        reply = QtWidgets.QMessageBox.question(
+                self,
+                'Message',
+                quit_msg,
+                QtWidgets.QMessageBox.Yes,
+                QtWidgets.QMessageBox.No)
         if reply == QtWidgets.QMessageBox.Yes:
             event.accept()
         else:
             event.ignore()
 
-
     def on_scale(self, value):
         self._widgets.scaleIcon(float(value/100.0))
 
-    def re_sort (self):
+    def re_sort(self):
         if self.sort_order:
             self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
         else:
@@ -182,14 +192,15 @@ class MainFrame(QtWidgets.QMainWindow):
             item = self._widgets.model().itemAtRow(i)
             hide = not (str(event) in str(item.config))
             self._widgets.setRowHidden(i, hide)
-    
+
     def centerWindow(self):
         frameGm = self.frameGeometry()
-        screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
+        screen = QApplication.desktop().screenNumber(
+                QApplication.desktop().cursor().pos())
         centerPoint = QApplication.desktop().screenGeometry(screen).center()
         frameGm.moveCenter(centerPoint)
         self.move(frameGm.topLeft())
-    
+
     def updateWindowTitle(self, text):
         self.setWindowTitle("VideoCut - " + text)
 
@@ -197,7 +208,6 @@ class MainFrame(QtWidgets.QMainWindow):
         pad = '\t'
         QtWidgets.QMessageBox.warning(self, "Warning!", aMessage + pad)
 
-    #-------- ACTIONS ----------
     def loadDir(self):
         pass
 
@@ -210,7 +220,10 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg.setInformativeText(infoText)
         dlg.setDetailedText(detailedText)
         dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        spacer = QtWidgets.QSpacerItem(
+                300, 0,
+                QtWidgets.QSizePolicy.Minimum,
+                QtWidgets.QSizePolicy.Expanding)
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
         return dlg
@@ -225,7 +238,10 @@ class MainFrame(QtWidgets.QMainWindow):
         dlg.setInformativeText(infoText)
         dlg.setStandardButtons(QtWidgets.QMessageBox.Ok)
         # Workaround to resize a qt dialog. WTF!
-        spacer = QtWidgets.QSpacerItem(300, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        spacer = QtWidgets.QSpacerItem(
+                300, 0,
+                QtWidgets.QSizePolicy.Minimum,
+                QtWidgets.QSizePolicy.Expanding)
         layout = dlg.layout()
         layout.addItem(spacer, layout.rowCount(), 0, 1, layout.columnCount())
 
@@ -235,7 +251,8 @@ class MainFrame(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
 
-    DEBUG_FORMAT = "%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+    DEBUG_FORMAT = """%(asctime)s %(name)-12s %(levelname)-8s
+    [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"""
     argv = sys.argv
     logfile = 'log.txt'
     if len(argv) == 2:

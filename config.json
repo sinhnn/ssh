@@ -1,0 +1,19 @@
+{
+	"VNC" : {
+		"maxUpdate" : 100,
+		"maxVNC" :  10,
+		"maxSCP" : 10,
+		"maxTerminal" : 10,
+		"maxBackup" : 10
+	},
+	"Table" : {
+		"maxCommand" : 100,
+		"maxSCP" : 10,
+		"maxBackup": 10,
+		"maxVNC" : 10,
+		"maxTerminal" : 10
+	},
+	"SSH" : {
+		"maxFailed" : 100
+	}
+}

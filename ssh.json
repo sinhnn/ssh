@@ -1,0 +1,4 @@
+{
+	"maxFailed" : 100,
+	"remoteBindAddress" : ["127.0.0.1", 5901]
+}

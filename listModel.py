@@ -1,11 +1,31 @@
-import os, sys, threading, time, logging
-from PyQt5 import QtWidgets, QtCore, QtGui
+import os
+import sys
+import threading
+import time
+import logging
+from PyQt5 import (
+    QtWidgets,
+    QtCore,
+    QtGui
+)
 
-from worker import Worker
-# from threading import Thread
-
+# My modules ==================================================================
 import common
-from sshDialogForm import SSHInputDialog, SCPDialog
+from worker import Worker
+from sshDialogForm import (
+    SSHInputDialog,
+    SCPDialog
+)
+
+from sshTable import (
+    ChooseCommandDialog,
+    # load_ssh_dir,
+    load_ssh_file
+)
+
+__PATH__ = os.path.dirname(os.path.abspath(__file__))
+__SSH_DIR__ = os.path.join(__PATH__, 'ssh')
+__XDOTOOL__ = 'DISPLAY=:1 xdotool'
 
 
 class ListModel(QtCore.QAbstractListModel):
@@ -22,17 +42,15 @@ class ListModel(QtCore.QAbstractListModel):
         self.threadpool = QtCore.QThreadPool()
         self.threadpool.setMaxThreadCount(50)
         self.threadpool.waitForDone(-1)
-        self.threadpool.start(Worker(self.force_update))
+        self.threadpool.start(Worker(self.update_thumbnail))
         self.threads = []
         # self.__daemon__()
-
-        # scp threadpool
 
         self.__updating_item__ = []
         self.__role__ = [QtCore.Qt.DecorationRole | QtCore.Qt.DisplayRole]
 
     def __daemon__(self):
-        for t in [self.force_update]:
+        for t in [self.update_thumbnail]:
             thread = threading.Thread(target=t)
             thread.daemon = True
             thread.start()
@@ -55,7 +73,7 @@ class ListModel(QtCore.QAbstractListModel):
         except Exception as e:
             logging.error(e, exc_info=True)
 
-    def force_update(self):
+    def update_thumbnail(self):
         while True:
             if common.close_all:
                 logging.info("Recieved close signal")
@@ -108,19 +126,6 @@ class ListModel(QtCore.QAbstractListModel):
         item = self.__data__[index.row()]
         if role == QtCore.Qt.DisplayRole:
             return str(item)
-
-        elif role == QtCore.Qt.ToolTipRole:
-            try:
-                text = []
-                for t in item.tunnel_proc + item.processes + item.exec_command_list:
-                    text.append(str(t))
-                # text.extend(item.processes)
-                # text.extend(item.exec_command_list)
-                text.append(item.loghandler.get_last_messages(10))
-                return '\n'.join(text)
-            except Exception as e:
-                return str(e)
-
         elif role == QtCore.Qt.DecorationRole:
             img = QtGui.QIcon(item.get('icon', 'icon/computer.png'))
             return img
@@ -157,11 +162,6 @@ class ListModel(QtCore.QAbstractListModel):
             logging.error(e, exc_info=True)
 
 
-from sshTable import ChooseCommandDialog, load_ssh_dir, load_ssh_file
-__PATH__ = os.path.dirname(os.path.abspath(__file__))
-__SSH_DIR__ = os.path.join(__PATH__, 'ssh')
-
-
 class ThumbnailListViewer(QtWidgets.QListView):
     """Docstring for ThumbnailListViewer. """
     __DEFAULT_ICON_SIZE__ = QtCore.QSize(160, 65)
@@ -196,22 +196,22 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
-            'new_url_at_current_tab': self.new_url_at_current_tab,
-            'Send F5': lambda: self._exec_command('DISPLAY=:1 xdotool key F5'),
-            'Send Space': lambda: self._exec_command('DISPLAY=:1 xdotool key space'),
-            'Send Escape': lambda: self._exec_command('DISPLAY=:1 xdotool key Escape'),
+            # 'new_url_at_current_tab': self.new_url_at_current_tab,
+            'Send F5': lambda: self._exec_command(__XDOTOOL__ + ' F5'),
+            'Send Space': lambda: self._exec_command(__XDOTOOL__ + ' space'),
+            'Send Escape': lambda: self._exec_command(__XDOTOOL__ + ' Escape'),
             'send_key': self.send_key,
             'new': self.new_item,
             'edit': self.open_file,
-            'upload': self.upload,
-            'download': self.download,
-            'backup': self.backup,
-            'command': self.exec_command,
+            # 'upload': self.upload,
+            # 'download': self.download,
+            # 'backup': self.backup,
+            # 'command': self.exec_command,
             'copy_hostaddress': self.copy_hostaddress,
             'copy_ssh_cmd': self.copy_ssh_cmd,
             'refresh': self.force_reconnect,
             'reload_config': self.reload_config,
-            'install_sshkey': self.install_sshkey,
+            # 'install_sshkey': self.install_sshkey,
             'delete': self.move_to_trash,
             'open_log': self.open_log,
         }
@@ -224,11 +224,13 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
     def open_file(self):
         for item in self.selectedItems():
-            if item.get('filepath'):
-                try:
-                    os.startfile(str(item.get('filepath')))
-                except Exception as e:
-                    logging.error('unable to open {}'.format(item.get('filepath')))
+            p = str(item.get('filepath', ''))
+            if not p:
+                continue
+            try:
+                os.startfile(p)
+            except Exception:
+                logging.error('unable to open {}'.format(p))
 
     def scaleIcon(self, v):
         nw = int(ThumbnailListViewer.__LARGE_ICON_SIZE__.width() * v)
@@ -272,7 +274,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
         return self.model().itemAtRow(row)
 
     def selectedItems(self):
-        return [self.model().itemAtRow(i.row()) for i in self.selectedIndexes()]
+        model = self.model()
+        return [model.itemAtRow(i.row()) for i in self.selectedIndexes()]
 
     def _exec_command(self, command):
         for item in self.selectedItems():
@@ -292,7 +295,8 @@ class ThumbnailListViewer(QtWidgets.QListView):
     def new_item(self):
         dialog = SSHInputDialog(parent=self)
         r = dialog.getResult()
-        if not r: return
+        if not r:
+            return
         for f in r:
             item = load_ssh_file(f)
             item.info['filepath'] = str(r)
@@ -319,7 +323,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
     def copy_hostaddress(self):
         items = self.selectedItems()
-        t = ["{}@{}".format(i.get('username'), i.get("hostname")) for i in items]
+        t = [i.hostaddress() for i in items]
         clipboard = QtWidgets.QApplication.clipboard()
         clipboard.clear(mode=clipboard.Clipboard)
         clipboard.setText("\n".join(t), mode=clipboard.Clipboard)
@@ -382,18 +386,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
                 QtWidgets.QLineEdit.Normal, "")
         url = text.strip()
         if okPressed and url:
-            cmd = '{0} key "ctrl+l" && {0} type --delay 100 "{1}" && {0} key Return'.format("DISPLAY=:1 xdotool", url)
-            for item in self.selectedItems():
-                worker = Worker(item.exec_command, cmd)
-                self.threadpool.start(worker)
-
-    def install_sshkey(self):
-        text, okPressed = QtWidgets.QInputDialog.getText(
-                self,
-                "Install SSH Key", "SSHKEY", QtWidgets.QLineEdit.Normal, "")
-        key = text.strip()
-        if okPressed and key:
-            cmd = '[[ -f {0} ]] || mkdir -p ~/.ssh && touch {0} && echo "{1}" >> {0}'.format('~/.ssh/authorized_keys', key)
+            cmd = '{0} key "ctrl+l" && {0} type --delay 100 "{1}" && {0} key Return'.format(__XDOTOOL__, url)
             for item in self.selectedItems():
                 worker = Worker(item.exec_command, cmd)
                 self.threadpool.start(worker)
@@ -404,7 +397,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
                 self,
                 "Send key", "Key", items, 0, False)
         if okPressed and item:
-            cmd = '{} key {}'.format("DISPLAY=:1 xdotool", item)
+            cmd = '{} key {}'.format(__XDOTOOL__, item)
             for item in self.selectedItems():
                 worker = Worker(item.exec_command, cmd)
                 self.threadpool.start(worker)
@@ -418,11 +411,14 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
     def move_to_trash(self):
         for item in self.selectedItems():
-            dirname = os.path.join(os.path.dirname(item.get('filepath')), 'Trash')
+            p = item.get('filepath')
+            if not p:
+                continue
+            dirname = os.path.join(os.path.dirname(p), 'Trash')
             os.makedirs(dirname, exist_ok=True)
-            newfile = os.path.join(dirname, os.path.basename(item.get('filepath')))
+            newfile = os.path.join(dirname, os.path.basename(p))
             try:
-                os.rename(item.get('filepath'), newfile)
+                os.rename(p, newfile)
             except Exception as e:
                 logging.error(e, exc_info=True)
             try:
@@ -430,20 +426,24 @@ class ThumbnailListViewer(QtWidgets.QListView):
             except Exception as e:
                 logging.error(e, exc_info=True)
 
+
 def main():
     import logging
-    logging.basicConfig(level=logging.INFO, filename='log.txt',
-        format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
+    logging.basicConfig(
+        level=logging.INFO,
+        filename='log.txt',
+        format='''%(asctime)s %(name)-12s %(levelname)-8s
+            [%(filename)s:%(lineno)s - %(funcName)20s()] %(message)s''',
+        datefmt='%m-%d %H:%M'
+    )
 
     app = QtWidgets.QApplication(sys.argv)
     w = ThumbnailListViewer()
-    # w.setFixedWidth(1800)
-    # w.setFixedHeight(1000)
     w.show()
     r = app.exec_()
     common.close_all = True
     sys.exit(r)
 
+
 if __name__ == "__main__":
     main()
-

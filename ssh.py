@@ -26,8 +26,8 @@ __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __CWD__ = os.getcwd()
 __CACHE__ = os.path.join(__CWD__, 'cache')
 __BACKUP__ = os.path.join(__CWD__, 'BACKUP')
-SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'sshclient.json')
 
+SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'ssh.json')
 __CONFIGS__ = {}
 if os.path.isfile(SSHCLIENT_CONFIG_FILE):
     try:
@@ -38,20 +38,23 @@ if os.path.isfile(SSHCLIENT_CONFIG_FILE):
         logging.error(e, exc_info=True)
 
 
-SSH_MAX_FAILED = 10
-SSH_REFRESH_CONNECTION = 200
-SSH_PUBLIC_KEY_FILE = os.path.join(__PATH__, 'id_rsa.pub')
-SSH_COMMON_OPTS = [
-    "-o", "CheckHostIP=no",
-    "-o", "StrictHostKeyChecking=no"
-]
+SSH_MAX_FAILED = __CONFIGS__.get("maxFailed", 100)
+REMOTE_BIND_ADDRESS = __CONFIGS__.get("remoteBindAddress", ["127.0.0.1", 5901])
+# SSH_CONFIG_FILE = __CONFIGS__.get("sshConfigFile")
+
+# SSH_PUBLIC_KEY_FILE = os.path.join(__PATH__, 'id_rsa.pub')
+#  Using ssh config file
+# SSH_COMMON_OPTS = [
+#     "-o", "CheckHostIP=no",
+#     "-o", "StrictHostKeyChecking=no"
+# ]
+#
 
 SSH_KEEP_ALIVE_OPTS = [
     '-o', "ServerAliveInterval=60",
     '-o', "TCPKeepAlive=true"
 ]
 
-REMOTE_BIND_ADDRESS = ('127.0.0.1', 5901)
 
 SCREENSHOT_FILE = '~/screenshot_1'
 SCREENSHOT_THUMB = '~/screenshot_1-thumb.jpg'
@@ -66,16 +69,17 @@ CMD_START_VNCSERVER = 'vncserver -geometry  1280x720' \
 CMD_RUN_VNCSERVER_IF_NEED = "{} || {}".format(
         CMD_CHECK_VNCSERVER,
         CMD_START_VNCSERVER)
-REQUIREMENTS = [
-    "xorg", "xserver-xorg",
-    "openbox", "obmenu",
-    "tigervnc*", "wget", "curl",
-    "firefox", "cifs-utils",
-    "caja", "mate-terminal", "caja-open-terminal",
-    "ffmpeg", "scrot", "xsel", "xdotool"
-]
-CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
-               + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
+
+# REQUIREMENTS = [
+#     "xorg", "xserver-xorg",
+#     "openbox", "obmenu",
+#     "tigervnc*", "wget", "curl",
+#     "firefox", "cifs-utils",
+#     "caja", "mate-terminal", "caja-open-terminal",
+#     "ffmpeg", "scrot", "xsel", "xdotool"
+# ]
+# CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
+#                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
 
 
 if platform.system() == "Windows":
@@ -210,7 +214,6 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
 
     def start_by_subprocess(self):
         args = [CMD]
-        args.extend(SSH_COMMON_OPTS)
         args.extend(SSH_KEEP_ALIVE_OPTS)
         args.extend(['-C2qTnN'])
 
@@ -261,14 +264,24 @@ class SSHClient(object):
         self.info = utils.rm_empty(info)
         self.config = self.info.get('config', {})
         self.fileConfig = fileConfig
+        if self.config.get('key_filename') == 'id_rsa':
+            self.config['key_filename'] = os.path.join(
+                    os.path.dirname(self.fileConfig),
+                    'id_rsa'
+                    )
 
         self.storeDir = os.path.join(
                 os.path.dirname(fileConfig),
                 self.config.get('hostname')
                 )
+
         self.dirs = {
             'backup': os.path.join(self.storeDir, 'backup'),
             'cache': os.path.join(self.storeDir, 'cache')
+        }
+        self.files = {
+            'disabled': os.path.join(self.storeDir, 'disabled'),
+            'failed': os.path.join(self.storeDir, 'failed')
         }
         self.create_data_dir()
 
@@ -278,8 +291,6 @@ class SSHClient(object):
         self.initLogger()
         self.portscanner = PortScanner()
 
-
-        # online
         # self._client = self.connect()
         self.changed = []
         self.status = {
@@ -508,7 +519,6 @@ class SSHClient(object):
             return True
 
     def __del__(self):
-        print("deleting ssh client")
         try:
             self.log('closing ssh client', level=logging.DEBUG)
             for t in self.tunnels:
@@ -522,6 +532,19 @@ class SSHClient(object):
         except Exception as e:
             self.log(e, level=logging.DEBUG, exc_info=True)
             pass
+
+    def abs_path(self, path):
+        def is_valid_path(path):
+            return os.path.isfile(path) or os.path.isdir(path)
+
+        if is_valid_path(path):
+            return os.path.abspath(path)
+
+        path = os.path.join(self.storeDir, path)
+        if is_valid_path(path):
+            return os.path.abspath(path)
+
+        return None
 
     def upload(self, files, remote_path, recursive):
         self.log(
@@ -568,17 +591,15 @@ class SSHClient(object):
             client.close()
         except Exception as error:
             self.log(error, level=logging.ERROR, exc_info=True)
-        # finally:
-            # print(results)
         return results
 
     def check_failed_connection(self):
-        if SSH_MAX_FAILED < self.__failedConnect__ < SSH_REFRESH_CONNECTION:
-            self.log("disabled because of many connection failures")
+        if os.path.isfile(self.files['disabled']):
             return False
 
-        if self.__failedConnect__ >= SSH_REFRESH_CONNECTION:
-            self.force_reconnect()
+        if self.__failedConnect__ > SSH_MAX_FAILED:
+            open(self.files['disabled'], 'w').write('')
+
         return True
 
     def __rm_terminated_process__(self):
@@ -677,7 +698,7 @@ class SSHClient(object):
         return r
 
     def __hostaddress_path__(self, path):
-        return '{}:{}'.format(self.__hostaddress__(), path)
+        return '{}:{}'.format(self.hostaddress(), path)
 
     def download_by_subprocess(self, src_path, dst_path, recursive=False, store=False, **kwargs):
         if store:
@@ -761,11 +782,28 @@ class SSHClient(object):
             self.log(e, level=logging.ERROR, exc_info=True)
             return False
 
+    def __ssh_config_file__(self):
+        d = os.path.dirname(self.fileConfig)
+        files = [
+            os.path.join(d, self.get('hostname'), '.ssh', 'config'),
+            os.path.join(d, self.get('hostname'), 'config'),
+            os.path.join(d, 'config')
+        ]
+        for f in files:
+            if os.path.isfile(f):
+                return str(f)
+        return None
+
     def __base_opt__(self):
-        args = SSH_COMMON_OPTS.copy()
+        args = []
+
+        p = self.__ssh_config_file__()
+        if p:
+            args.extend(['-F', p])
+
         if self.config.get('key_filename'):
             args.extend(['-i', self.config['key_filename']])
-        args.append(self.__hostaddress__())
+        args.append(self.hostaddress())
         return args
 
     def cmdline(self):
@@ -780,12 +818,13 @@ class SSHClient(object):
         return ' '.join(args)
 
     def __base_opt_scp__(self):
-        args = SSH_COMMON_OPTS.copy()
+        # args = SSH_COMMON_OPTS.copy()
+        args = []
         if self.config.get('key_filename'):
             args.extend(['-i', self.config['key_filename']])
         return args
 
-    def __hostaddress__(self):
+    def hostaddress(self):
         return '{}@{}'.format(self.config['username'], self.config['hostname'])
 
     # ERROR: hangout when running
@@ -869,42 +908,43 @@ class SSHClient(object):
 
         def is_done(*args):
             return all([s.channel.exit_status_ready() for s in args])
-
-        # avoid dead-loop
         i = 0
-        while (not is_done(stdout, stderr)) and i < 10000:
+        r = True
+        while r:
             try:
                 out = []
-                if stdout.recv_ready():
-                    out = stdout.readlines()
-                    r_out.extend(out)
-                    if 'password' in ' '.join(out):
-                        self.log("fill passwd: {}".format(self.config['password']))
-                        stdin.write(self.config['password'] + '\n')
-                        stdin.flush()
-                    if len(out):
-                        i = 0
-                        self.log("{}\n{}".format(command, ''.join(out)))
+                out = stdout.readlines()
+                r_out.extend(out)
+                if 'password' in ' '.join(out):
+                    self.log("fill passwd: {}".format(self.config['password']))
+                    stdin.write(self.config['password'] + '\n')
+                    stdin.flush()
+                if len(out):
+                    i = 0
+                    self.log("{}\n{}".format(command, ''.join(out)))
 
                 err = []
-                if stderr.recv_ready():
-                    err = stderr.readlines()
-                    r_err.extend(err)
-                    if len(err):
-                        i = 0
-                        self.log("{}\n{}".format(
-                            command, ''.join(err)),
-                            level=logging.ERROR)
+                err = stderr.readlines()
+                r_err.extend(err)
+                if len(err):
+                    i = 0
+                    self.log("{}\n{}".format(
+                        command, ''.join(err)),
+                        level=logging.ERROR)
 
                 if store:
                     if len(out):
-                        m = min(10, len(out))
-                        self.status['msg'].write(''.join(out[-m:]).strip())
+                        # m = min(10, len(out))
+                        self.status['msg'].write(''.join(out).strip())
                     if len(err):
                         self.status['error'].write(''.join(err).strip())
                     else:
                         self.status['error'].write('')
+
+                r = not is_done(stdout, stderr)
                 i += 1
+                if i > 10000:
+                    break
             except Exception as e:
                 self.log(e, level=logging.ERROR, exc_info=True)
                 self.__rm_exec_command_list_id__(cid)

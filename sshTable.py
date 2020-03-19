@@ -35,7 +35,6 @@ from urlDialog import URLForm
 from simplelistmodel import QObjectListModel
 from worker import Worker
 # =============================================================================
-
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -133,7 +132,7 @@ def load_ssh_dir(dir):
         try:
             server = load_ssh_file(entry.path)
             if server:
-                server.info['filepath'] = entry.path
+                server.info['filepath'] = os.path.abspath(entry.path)
                 results.append(server)
         except Exception:
             pass
@@ -481,7 +480,7 @@ class SSHWidget(QtWidgets.QWidget):
     def daemon(self):
         # threads = []
         # for t in [self.refreshTaskList, self.refreshLog]:
-        for t in [self.refreshTaskList, self.refreshLog]:
+        for t in [self.refreshTaskList]:
             t = threading.Thread(target=t)
             t.daemon = True
             t.start()
@@ -500,7 +499,7 @@ class SSHWidget(QtWidgets.QWidget):
 
 def main():
     import logging
-    logging.basicConfig(level=logging.ERROR,
+    logging.basicConfig(level=logging.INFO,
             format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
     argv = sys.argv
     app = QApplication(argv)
