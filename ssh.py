@@ -11,7 +11,7 @@ import logging
 import socket
 # import cv2
 import paramiko
-import sshtunnel
+# import sshtunnel
 from scp import SCPClient, SCPException
 import collections
 
@@ -20,8 +20,11 @@ import collections
 from port import PortScanner
 from remoteFile import EncryptedRemoteFile
 import utils
+# from ssh_options import (
+    # KEEP_ALIVE,
+# )
 
-sshtunnel.SSH_TIMEOUT = 10.0
+from tunnel import SSHTunnelForwarder
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __CWD__ = os.getcwd()
 __CACHE__ = os.path.join(__CWD__, 'cache')
@@ -39,22 +42,12 @@ if os.path.isfile(SSHCLIENT_CONFIG_FILE):
 
 
 SSH_MAX_FAILED = __CONFIGS__.get("maxFailed", 100)
-# REMOTE_BIND_ADDRESS = __CONFIGS__.get("remoteBindAddress", ["127.0.0.1", 5901])
 REMOTE_BIND_ADDRESS = ("127.0.0.1", 5901)
-# SSH_CONFIG_FILE = __CONFIGS__.get("sshConfigFile")
 
-# SSH_PUBLIC_KEY_FILE = os.path.join(__PATH__, 'id_rsa.pub')
-#  Using ssh config file
-# SSH_COMMON_OPTS = [
-#     "-o", "CheckHostIP=no",
-#     "-o", "StrictHostKeyChecking=no"
+# SSH_KEEP_ALIVE_OPTS = [
+#     '-o', "ServerAliveInterval=60",
+#     '-o', "TCPKeepAlive=true"
 # ]
-#
-
-SSH_KEEP_ALIVE_OPTS = [
-    '-o', "ServerAliveInterval=60",
-    '-o', "TCPKeepAlive=true"
-]
 
 
 SCREENSHOT_FILE = '~/screenshot_1'
@@ -71,16 +64,16 @@ CMD_RUN_VNCSERVER_IF_NEED = "{} || {}".format(
         CMD_CHECK_VNCSERVER,
         CMD_START_VNCSERVER)
 
-# REQUIREMENTS = [
-#     "xorg", "xserver-xorg",
-#     "openbox", "obmenu",
-#     "tigervnc*", "wget", "curl",
-#     "firefox", "cifs-utils",
-#     "caja", "mate-terminal", "caja-open-terminal",
-#     "ffmpeg", "scrot", "xsel", "xdotool"
-# ]
-# CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
-#                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
+REQUIREMENTS = [
+    "xorg", "xserver-xorg",
+    "openbox", "obmenu",
+    "tigervnc*", "wget", "curl",
+    "firefox", "cifs-utils",
+    "caja", "mate-terminal", "caja-open-terminal",
+    "ffmpeg", "scrot", "xsel", "xdotool"
+]
+CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
+               + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
 
 
 if platform.system() == "Windows":
@@ -174,85 +167,6 @@ class StoredLoggerHandler(logging.FileHandler):
             if len(msgs) > n:
                 break
         return '\n'.join(msgs)
-
-
-class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
-    """Docstring for SSHTunnelForwarder. """
-    def __init__(self, **kwargs):
-        sshtunnel.SSHTunnelForwarder.__init__(self, **kwargs)
-        self.config = kwargs
-        self.tunnel_proc = []
-        if 'local_bind_port' not in self.config.keys():
-            self.config['local_bind_port'] = self.config.get(
-                    'local_bind_address',
-                    ('127.0.0,1', None))[1]
-            logging.info(self.config['local_bind_port'])
-
-    def get(self, key, default=None):
-        return self.config.get(key, default)
-
-    def local_bind_address_str(self):
-        key = 'local_bind_address'
-        if self.get(key):
-            return '{}:{}'.format(self.get(key)[0], self.get(key)[1])
-        else:
-            host = self.get('local_bind_host')
-            port = self.get('local_bind_port')
-            return '{}:{}'.format(host, port)
-
-    def remote_bind_address_str(self):
-        key = 'remote_bind_address'
-        remote_bind_address = self.get(key, (None, None))
-        return '{}:{}'.format(remote_bind_address[0], remote_bind_address[1])
-
-    def __eq__(self, other):
-        for info in ['remote_bind_address']:
-            n = self.get(info)
-            o = other.get(info)
-            if n != o:
-                return False
-        return True
-
-    def start_by_subprocess(self):
-        args = [CMD]
-        args.extend(SSH_KEEP_ALIVE_OPTS)
-        args.extend(['-C2qTnN'])
-
-        if self.config.get('ssh_pkey'):
-            args.extend(['-i', self.config.get('ssh_pkey')])
-
-        if self.config.get('remote_bind_address'):
-            args.extend([
-                '-L', '{}:{}'.format(
-                    self.get('local_bind_port'),
-                    self.remote_bind_address_str())
-                ])
-        else:
-            args.extend(['-D', str(self.get('local_bind_port'))])
-
-        args.append('{}@{}'.format(
-            self.config['ssh_username'],
-            self.config['ssh_address_or_host'][0]))
-        logging.info("starting new tunnel: {}".format(' '.join(args)))
-        if not self.config.get('ssh_pkey'):
-            proc = psutil.Popen(
-                    args,
-                    creationflags=subprocess.CREATE_NEW_CONSOLE)
-        else:
-            proc = psutil.Popen(args)
-        self.tunnel_proc.append(proc)
-        time.sleep(1)
-        return proc
-
-    def is_alive(self):
-        try:
-            return sshtunnel.SSHTunnelForwarder.is_alive()
-        except Exception as e:
-            logging.debug(e, exc_info=True)
-            for proc in self.tunnel_proc:
-                if proc.is_running():
-                    return True
-        return False
 
 
 class SSHClient(object):
@@ -865,9 +779,13 @@ class SSHClient(object):
 
     def exec_command(self, command, new=True, store=False, background=False, log=True):
         if not self.check_failed_connection():
+            if store:
+                self.status['msg'].write('failed to connect')
             return (False, [], [])
 
         if self.__is_command_in_runnning_list__(command):
+            if store:
+                self.status['msg'].write('duplicated task')
             return (False, [], [])
 
         if new is True:
@@ -1107,7 +1025,7 @@ class SSHClient(object):
 
         cmd = 'mkdir -p ~/.ssh' \
             + ' && echo -e "\n{}" >> ~/.ssh/authorized_keys'.format(key)
-        (command, out, err) = self.exec_command(cmd)
+        (command, out, err) = self.exec_command(cmd, store=True)
         return cmd != command
 
     def vncserver_list(self):

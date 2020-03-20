@@ -50,7 +50,7 @@ class ChooseCommandDialog(QtWidgets.QDialog):
     def initUI(self):
         layout = QtWidgets.QGridLayout()
         self.buttonBox = QtWidgets.QDialogButtonBox(
-                QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
@@ -186,8 +186,10 @@ class SSHTable(QTableView):
 
     def configTable(self):
         self.horizontalHeader().setStretchLastSection(True)
-        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self.horizontalHeader().setSectionResizeMode(
+                QtWidgets.QHeaderView.Interactive)
+        self.verticalHeader().setSectionResizeMode(
+                QtWidgets.QHeaderView.Interactive)
         self.setSortingEnabled(True)
         self.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
@@ -197,7 +199,8 @@ class SSHTable(QTableView):
         self.setColumnWidth(0, min(100, int(w*0.1)))
         for i in range(1, self.model().columnCount() - 1):
             self.setColumnWidth(1, min(300, int(w*n)))
-        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self.horizontalHeader().setSectionResizeMode(
+                QtWidgets.QHeaderView.Interactive)
 
     def contextMenuEvent(self, event):
         self.menu = QMenu(self)
@@ -205,7 +208,6 @@ class SSHTable(QTableView):
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
             'new': self.new_item,
-            # 'open_watch_log': lambda: self.open_terminal('watch tail --lines=10 /root/.bashrc'),
             'open_folder': self.open_folder,
             'update_url': self.update_url,
             'update_server_info': self.update_info,
@@ -357,11 +359,13 @@ class SSHTable(QTableView):
 
     def open_file(self):
         for item in self.selectedItems():
-            if item.get('filepath'):
-                try:
-                    os.startfile(str(item.get('filepath')))
-                except Exception:
-                    logging.error('unable to open {}'.format(item.get('filepath')))
+            p = str(item.get('filepath'))
+            if not p:
+                return
+            try:
+                os.startfile(p)
+            except Exception:
+                logging.error('unable to open {}'.format(p))
 
     def copy_tunnel_cmd(self):
         cmds = [item.ssh_tunnel_cmd() for item in self.selectedItems()]
@@ -371,11 +375,12 @@ class SSHTable(QTableView):
 
     def move_to_trash(self):
         for item in self.selectedItems():
-            dirname = os.path.join(os.path.dirname(item.get('filepath')), 'Trash')
+            f = item.get('filepath')
+            dirname = os.path.join(os.path.dirname(f), 'Trash')
             os.makedirs(dirname, exist_ok=True)
-            newfile = os.path.join(dirname, os.path.basename(item.get('filepath')))
+            newfile = os.path.join(dirname, os.path.basename(f))
             try:
-                os.rename(item.get('filepath'), newfile)
+                os.rename(f, newfile)
             except Exception as e:
                 logging.error(e, exc_info=True)
             try:
@@ -396,7 +401,6 @@ class SSHTable(QTableView):
             item = load_ssh_file(f)
             item.info['filepath'] = str(r)
             self.model().appendItem(item)
-
 
 
 class SSHWidget(QtWidgets.QWidget):
@@ -511,8 +515,10 @@ class SSHWidget(QtWidgets.QWidget):
 
 def main():
     import logging
-    logging.basicConfig(level=logging.INFO,
-            format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s', datefmt='%m-%d %H:%M')
+    logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s',
+            datefmt='%m-%d %H:%M')
     argv = sys.argv
     app = QApplication(argv)
     if len(argv) == 2:
@@ -524,9 +530,8 @@ def main():
     w.setGeometry(0, 0, 1000, 1000)
     w.tableview.updateGeometry()
     w.show()
-    sys.exit(app.exec_()) 
+    sys.exit(app.exec_())
 
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     main()
-

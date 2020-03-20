@@ -206,7 +206,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
             # 'upload': self.upload,
             # 'download': self.download,
             # 'backup': self.backup,
-            # 'command': self.exec_command,
+            'command': self.exec_command,
             'copy_hostaddress': self.copy_hostaddress,
             'copy_ssh_cmd': self.copy_ssh_cmd,
             'refresh': self.force_reconnect,
@@ -385,11 +385,12 @@ class ThumbnailListViewer(QtWidgets.QListView):
                 self, "URL", "URL",
                 QtWidgets.QLineEdit.Normal, "")
         url = text.strip()
-        if okPressed and url:
-            cmd = '{0} key "ctrl+l" && {0} type --delay 100 "{1}" && {0} key Return'.format(__XDOTOOL__, url)
-            for item in self.selectedItems():
-                worker = Worker(item.exec_command, cmd)
-                self.threadpool.start(worker)
+        if not okPressed or not url:
+            return
+        cmd = '{0} key "ctrl+l" && {0} type --delay 100 "{1}" && {0} key Return'.format(__XDOTOOL__, url)
+        for item in self.selectedItems():
+            worker = Worker(item.exec_command, cmd)
+            self.threadpool.start(worker)
 
     def send_key(self):
         items = ("Escape", "F5", "space", "Return", "f", "ctrl+w", "ctrl+q")

@@ -1,13 +1,20 @@
 
-SSH_VNCVIEWER_OPTIONS  = {
-   "CheckHostIP" : "no",
-   "TCPKeepAlive" : 30,
-   "IdentityFile" : "id_rsa"
-   "LocalForward" :  "auto"
-   "RemoteForward" : 5901
+
+KEEP_ALIVE = [
+    '-o', "ServerAliveInterval=60",
+    '-o', "TCPKeepAlive=true"
+]
+
+
+SSH_VNCVIEWER_OPTIONS = {
+   "CheckHostIP": "no",
+   "TCPKeepAlive": 30,
+   "IdentityFile": "id_rsa",
+   "LocalForward":  "auto",
+   "RemoteForward": 5901
 }
 
-#https://linux.die.net/man/5/ssh_config
+# https://linux.die.net/man/5/ssh_config
 # SSH_OPTIONS = {
 #    "AddKeysToAgent" : {"required" : False, "default" : None},
 #    "AddressFamily" : {"required" : False, "default" : None},

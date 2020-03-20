@@ -1,28 +1,14 @@
 import logging
-import platform
-
+import subprocess
+import psutil
+import time
 import sshtunnel
 
-if platform.system() == "Windows":
-    CMD = r'C:\Windows\System32\OpenSSH\ssh.exe'
-    SCP = r'C:\Windows\System32\OpenSSH\scp.exe'
-    RSYNC = r'rsync.exe'
-    SSHFS = r'sshfs.exe'
-    VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
-    VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot'))
-    OPEN_IN_TERMINAL = ["cmd.exe", "/k"]
-    OPEN_SSH_IN_TERMINAL = OPEN_IN_TERMINAL + ["ssh.exe"]
-elif platform.system() == "Linux":
-    CMD = "ssh"
-    SCP = 'scp'
-    RSYNC = r'rsync'
-    SSHFS = r'sshfs'
-    OPEN_IN_TERMINAL = []
-    VNCVIEWER = 'vncviewer'
-    VNCSNAPSHOT = 'vncsnapshot'
-else:
-    print("unsupported platform " + platform.system())
-    sys.exit(1)
+# My modules ==================================================================
+from platform_ssh import (
+    CMD,
+)
+from ssh_options import KEEP_ALIVE
 
 
 class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
@@ -64,8 +50,8 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
 
     def start_by_subprocess(self):
         args = [CMD]
-        args.extend(SSH_COMMON_OPTS)
-        args.extend(SSH_KEEP_ALIVE_OPTS)
+        # args.extend(SSH_COMMON_OPTS)
+        args.extend(KEEP_ALIVE)
         args.extend(['-C2qTnN'])
 
         if self.config.get('ssh_pkey'):
@@ -103,6 +89,3 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
                 if proc.is_running():
                     return True
         return False
-
-
-

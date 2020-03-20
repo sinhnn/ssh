@@ -19,7 +19,6 @@ from sshTable import (
         load_ssh_dir
 )
 
-# from logWidget import LogWidget, PlainTextEditLogger
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
 
