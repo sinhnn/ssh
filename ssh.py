@@ -39,7 +39,8 @@ if os.path.isfile(SSHCLIENT_CONFIG_FILE):
 
 
 SSH_MAX_FAILED = __CONFIGS__.get("maxFailed", 100)
-REMOTE_BIND_ADDRESS = __CONFIGS__.get("remoteBindAddress", ["127.0.0.1", 5901])
+# REMOTE_BIND_ADDRESS = __CONFIGS__.get("remoteBindAddress", ["127.0.0.1", 5901])
+REMOTE_BIND_ADDRESS = ("127.0.0.1", 5901)
 # SSH_CONFIG_FILE = __CONFIGS__.get("sshConfigFile")
 
 # SSH_PUBLIC_KEY_FILE = os.path.join(__PATH__, 'id_rsa.pub')
