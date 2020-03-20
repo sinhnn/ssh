@@ -30,7 +30,7 @@ from ObjectsTableModel import (
 # =============================================================================
 import ssh
 import crypt
-from sshDialogForm import SCPDialog
+from sshDialogForm import SCPDialog, SSHInputDialog
 from urlDialog import URLForm
 from simplelistmodel import QObjectListModel
 from worker import Worker
@@ -204,6 +204,7 @@ class SSHTable(QTableView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
+            'new': self.new_item,
             # 'open_watch_log': lambda: self.open_terminal('watch tail --lines=10 /root/.bashrc'),
             'open_folder': self.open_folder,
             'update_url': self.update_url,
@@ -385,6 +386,17 @@ class SSHTable(QTableView):
     def force_update(self, index):
         rect = self.visualRect(index)
         self.viewport().update(rect)
+
+    def new_item(self):
+        dialog = SSHInputDialog(parent=self)
+        r = dialog.getResult()
+        if not r:
+            return
+        for f in r:
+            item = load_ssh_file(f)
+            item.info['filepath'] = str(r)
+            self.model().appendItem(item)
+
 
 
 class SSHWidget(QtWidgets.QWidget):
