@@ -1,7 +1,5 @@
 import os
-import sys
 import subprocess
-import platform
 import threading
 import time
 import re
@@ -9,9 +7,7 @@ import psutil
 import json
 import logging
 import socket
-# import cv2
 import paramiko
-# import sshtunnel
 from scp import SCPClient, SCPException
 import collections
 
@@ -20,36 +16,21 @@ import collections
 from port import PortScanner
 from remoteFile import EncryptedRemoteFile
 import utils
-# from ssh_options import (
-    # KEEP_ALIVE,
-# )
 
 from tunnel import SSHTunnelForwarder
-__PATH__ = os.path.dirname(os.path.abspath(__file__))
-__CWD__ = os.getcwd()
-__CACHE__ = os.path.join(__CWD__, 'cache')
-__BACKUP__ = os.path.join(__CWD__, 'BACKUP')
+from platform_ssh import (
+    CMD,
+    SCP,
+    # RSYNC,
+    # SSHFS,
+    VNCVIEWER,
+    # VNCSNAPSHOT,
+    OPEN_IN_TERMINAL,
+    OPEN_SSH_IN_TERMINAL,
+)
 
-SSHCLIENT_CONFIG_FILE = os.path.join(__PATH__, 'ssh.json')
-__CONFIGS__ = {}
-if os.path.isfile(SSHCLIENT_CONFIG_FILE):
-    try:
-        fp = open(SSHCLIENT_CONFIG_FILE, 'r')
-        __CONFIGS__ = json.load(fp)
-        fp.close()
-    except Exception as e:
-        logging.error(e, exc_info=True)
-
-
-SSH_MAX_FAILED = __CONFIGS__.get("maxFailed", 100)
+SSH_MAX_FAILED = 100
 REMOTE_BIND_ADDRESS = ("127.0.0.1", 5901)
-
-# SSH_KEEP_ALIVE_OPTS = [
-#     '-o', "ServerAliveInterval=60",
-#     '-o', "TCPKeepAlive=true"
-# ]
-
-
 SCREENSHOT_FILE = '~/screenshot_1'
 SCREENSHOT_THUMB = '~/screenshot_1-thumb.jpg'
 CMD_SCREENSHOT = 'DISPLAY=:1 scrot -z --thumb 20 ~/screenshot_1.jpg'
@@ -74,28 +55,6 @@ REQUIREMENTS = [
 ]
 CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
-
-
-if platform.system() == "Windows":
-    CMD = r'C:\Windows\System32\OpenSSH\ssh.exe'
-    SCP = r'C:\Windows\System32\OpenSSH\scp.exe'
-    RSYNC = r'rsync.exe'
-    SSHFS = r'sshfs.exe'
-    VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
-    VNCSNAPSHOT = str(os.path.join(__PATH__, 'vncsnapshot', 'vncsnapshot'))
-    OPEN_IN_TERMINAL = ["cmd.exe", "/k"]
-    OPEN_SSH_IN_TERMINAL = OPEN_IN_TERMINAL + ["ssh.exe"]
-elif platform.system() == "Linux":
-    CMD = "ssh"
-    SCP = 'scp'
-    RSYNC = r'rsync'
-    SSHFS = r'sshfs'
-    OPEN_IN_TERMINAL = []
-    VNCVIEWER = 'vncviewer'
-    VNCSNAPSHOT = 'vncsnapshot'
-else:
-    print("unsupported platform " + platform.system())
-    sys.exit(1)
 
 
 def intersection(l1, l2):
@@ -245,6 +204,8 @@ class SSHClient(object):
                 parent=self)
         }
 
+        self.remoteFiles = ['~/.ytv/record.txt']
+
         self.tunnels = []
         self.tunnel_proc = []
 
@@ -263,7 +224,6 @@ class SSHClient(object):
 
     def create_data_dir(self):
         try:
-            # for d in [__BACKUP__, __CACHE__]:
             for k, v in self.dirs.items():
                 os.makedirs(v, exist_ok=True)
             return True
@@ -316,23 +276,21 @@ class SSHClient(object):
     def initLogger(self):
         try:
             self.logger = logging.getLogger('SSHClient_{}'.format(self.id))
-            logFile = os.path.join(
-                    __CACHE__,
-                    '{}.txt'.format(self.get('hostname')))
-            self.logFile = logFile
+            logFile = os.path.join(self.storeDir, 'log.txt')
             if not os.path.isfile(logFile):
                 open(logFile, 'w').write('')
+
+            DEBUG_FORMAT = "%(asctime)s %(levelname)-8s %(message)s"
+
             fileHandler = StoredLoggerHandler(
                     filename=logFile,
                     mode='a', encoding='utf-8', delay=False)
-            DEBUG_FORMAT = "%(asctime)s %(levelname)-8s %(message)s"
             fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
             fileHandler.setLevel(logging.DEBUG)
             self.loghandler = fileHandler
             self.logger.addHandler(fileHandler)
             self.logger.setLevel(logging.DEBUG)
             self.logger.propagate = False
-
         except Exception as e:
             self.logger = logging
             logging.error(e, exc_info=True)
@@ -644,7 +602,7 @@ class SSHClient(object):
             return False
         if tries <= 0:
             self.__failedConnect__ += 1
-            self.__delete_icon__()
+            self.__delete_screen__()
             self.log('paramiko: unable to connect', level=logging.ERROR)
             return False
 
@@ -656,8 +614,7 @@ class SSHClient(object):
             self.__failedConnect__ = 0
             return client
         except TimeoutError:
-            if 'icon' in self.status.keys():
-                del self.status['icon']
+            self.__delete_screen__()
             return self.connect(client=client, tries=tries-1)
         except socket.timeout:
             return self.connect(client=client, tries=tries-1)
@@ -853,7 +810,6 @@ class SSHClient(object):
 
                 if store:
                     if len(out):
-                        # m = min(10, len(out))
                         self.status['msg'].write(''.join(out).strip())
                     if len(err):
                         self.status['error'].write(''.join(err).strip())
@@ -884,7 +840,6 @@ class SSHClient(object):
         args.extend(self.__base_opt__())
         if command is not None:
             args.append('"{}"'.format(command))
-        print(' '.join(args))
         psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
 
     def exec_file(self, file):
@@ -911,7 +866,6 @@ class SSHClient(object):
             self.log("Found running tunnel", level=logging.INFO)
         if not ts:
             _ = self.create_tunnel(remote_bind_address=REMOTE_BIND_ADDRESS)
-            # _  = self.create_tunnel_subprocess()
             if _:
                 ts.append(_)
         return ts
@@ -947,16 +901,16 @@ class SSHClient(object):
             self.log("another update thumbnail's running", level=logging.DEBUG)
             return False
 
-    def __delete_icon__(self):
-        if 'icon' in self.status.keys():
-            del self.status['icon']
+    def __delete_screen__(self):
+        if 'screen' in self.status.keys():
+            del self.status['screen']
 
     def vncscreenshot(self):
         local_path = self.cached_path(self.config['hostname'] + '.jpg')
         command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         if command in [False, None]:
             delete_file(local_path)
-            return self.__delete_icon__()
+            return self.__delete_screen__()
 
         time.sleep(1)
         self.download(
@@ -964,9 +918,9 @@ class SSHClient(object):
                 local_path=local_path)
 
         if os.path.isfile(local_path):
-            self.status['icon'] = local_path
+            self.status['screen'] = local_path
         else:
-            self.__delete_icon__()
+            self.__delete_screen__()
 
     def vncscreenshot_subprocess(self):
         local_path = self.cached_path(self.config['hostname'] + '.jpg')
@@ -979,7 +933,7 @@ class SSHClient(object):
 
         if command in [False, None]:
             delete_file(local_path)
-            return self.__delete_icon__()
+            return self.__delete_screen__()
 
         returncode = self.download_by_subprocess(
                 src_path='screenshot_1-thumb.jpg',
@@ -988,9 +942,9 @@ class SSHClient(object):
 
         if returncode != 0:
             delete_file(local_path)
-            return self.__delete_icon__()
+            return self.__delete_screen__()
 
-        self.status['icon'] = local_path
+        self.status['screen'] = local_path
 
     def create_vncserver(self, x):
         (c, out, err) = self.exec_command(CMD_RUN_VNCSERVER_IF_NEED, log=False)

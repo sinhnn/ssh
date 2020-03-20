@@ -127,9 +127,8 @@ class ListModel(QtCore.QAbstractListModel):
         if role == QtCore.Qt.DisplayRole:
             return str(item)
         elif role == QtCore.Qt.DecorationRole:
-            img = QtGui.QIcon(item.get('icon', 'icon/computer.png'))
+            img = QtGui.QIcon(item.get('screen', 'icon/computer.png'))
             return img
-
         return None
 
     def flags(self, idx):
@@ -196,6 +195,7 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
+            'open_terminal_with_cmd': self.open_terminal_with_cmd,
             # 'new_url_at_current_tab': self.new_url_at_current_tab,
             'Send F5': lambda: self._exec_command(__XDOTOOL__ + ' F5'),
             'Send Space': lambda: self._exec_command(__XDOTOOL__ + ' space'),
@@ -203,15 +203,15 @@ class ThumbnailListViewer(QtWidgets.QListView):
             'send_key': self.send_key,
             'new': self.new_item,
             'edit': self.open_file,
-            # 'upload': self.upload,
-            # 'download': self.download,
-            # 'backup': self.backup,
+            'upload': self.upload,
+            'download': self.download,
+            'backup': self.backup,
             'command': self.exec_command,
             'copy_hostaddress': self.copy_hostaddress,
             'copy_ssh_cmd': self.copy_ssh_cmd,
             'refresh': self.force_reconnect,
             'reload_config': self.reload_config,
-            # 'install_sshkey': self.install_sshkey,
+            'install_sshkey': self.install_sshkey,
             'delete': self.move_to_trash,
             'open_log': self.open_log,
         }
@@ -307,9 +307,19 @@ class ThumbnailListViewer(QtWidgets.QListView):
             worker = Worker(item.open_vncviewer)
             self.vncviewer_threads.start(worker)
 
-    def open_terminal(self):
+    def open_terminal_with_cmd(self):
+        text, okPressed = QtWidgets.QInputDialog.getText(
+                self, "CMD", "CMD",
+                QtWidgets.QLineEdit.Normal, "")
+        if not okPressed:
+            return
         for item in self.selectedItems():
-            worker = Worker(item.invoke_shell)
+            worker = Worker(item.invoke_shell, text)
+            self.terminal_threads.start(worker)
+
+    def open_terminal(self, cmd=None):
+        for item in self.selectedItems():
+            worker = Worker(item.invoke_shell, cmd)
             self.terminal_threads.start(worker)
 
     def copy_ssh_cmd(self):
@@ -426,6 +436,16 @@ class ThumbnailListViewer(QtWidgets.QListView):
                 self.model().removeItem(item)
             except Exception as e:
                 logging.error(e, exc_info=True)
+
+    def install_sshkey(self):
+        f = QtWidgets.QFileDialog.getOpenFileName(self, "Open Files")
+        if not f[0]:
+            return False
+
+        if f[0]:
+            for item in self.selectedItems():
+                worker = Worker(item.install_sshkey, f[0])
+                self.threadpool.start(worker)
 
 
 def main():

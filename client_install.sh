@@ -15,6 +15,7 @@ function mwget() {
 url="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
 ofile=`basename $url`
 wget $url -O $ofile \
+	&& sudo apt update \
 	&& sudo apt install -y ./$ofile \
 	&& sudo apt install -y xorg xserver-xorg openbox obmenu tigervnc* wget curl firefox cifs-utils caja mate-terminal caja-open-terminal ffmpeg scrot xsel xdotool \
 	&& echo '0' > .done
