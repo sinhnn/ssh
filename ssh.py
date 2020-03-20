@@ -286,11 +286,12 @@ class SSHClient(object):
                     filename=logFile,
                     mode='a', encoding='utf-8', delay=False)
             fileHandler.setFormatter(logging.Formatter(DEBUG_FORMAT))
-            fileHandler.setLevel(logging.DEBUG)
+            fileHandler.setLevel(logging.INFO)
             self.loghandler = fileHandler
             self.logger.addHandler(fileHandler)
-            self.logger.setLevel(logging.DEBUG)
+            self.logger.setLevel(logging.INFO)
             self.logger.propagate = False
+            self.logFile = logFile
         except Exception as e:
             self.logger = logging
             logging.error(e, exc_info=True)
@@ -875,6 +876,7 @@ class SSHClient(object):
             self.create_vncserver(1)
             ts = self.__get_vnctunnel__()
             if not ts:
+                self.log("no tunnel found", level=logging.ERROR)
                 return False
             if ts[0]:
                 self.log("Openning vncviewer")
