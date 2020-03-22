@@ -12,20 +12,10 @@ from PyQt5 import (
 # My modules ==================================================================
 import common
 from worker import Worker
-from sshDialogForm import (
-    SSHInputDialog,
-    SCPDialog
-)
-
-from sshTable import (
-    ChooseCommandDialog,
-    # load_ssh_dir,
-    load_ssh_file
-)
+from sshContextMenu import SSHActions, XDOTOOL
 
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
-__XDOTOOL__ = 'DISPLAY=:1 xdotool'
 
 
 class ListModel(QtCore.QAbstractListModel):
@@ -161,7 +151,7 @@ class ListModel(QtCore.QAbstractListModel):
             logging.error(e, exc_info=True)
 
 
-class ThumbnailListViewer(QtWidgets.QListView):
+class ThumbnailListViewer(SSHActions, QtWidgets.QListView):
     """Docstring for ThumbnailListViewer. """
     __DEFAULT_ICON_SIZE__ = QtCore.QSize(160, 65)
     __DEFAULT_GRID_SIZE__ = QtCore.QSize(160, 130)
@@ -170,36 +160,35 @@ class ThumbnailListViewer(QtWidgets.QListView):
 
     def __init__(self, parent=None, **kwargs):
         """TODO: to be defined. """
+        SSHActions.__init__(self, parent=parent, **kwargs)
         QtWidgets.QListView.__init__(self, parent, **kwargs)
 
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setIconView()
-        self.doubleClicked.connect(self.open)
+        self.doubleClicked.connect(self.open_vncviewer)
         self.setDragEnabled(False)
         self.initUI()
-        self.threadpool = QtCore.QThreadPool()
-        self.threadpool.setMaxThreadCount(100)
 
-        self.scp_pool = QtCore.QThreadPool()
-        self.scp_pool.setMaxThreadCount(5)
-
-        self.backup_pool = QtCore.QThreadPool()
-        self.backup_pool.setMaxThreadCount(10)
-
-        self.vncviewer_threads = QtCore.QThreadPool()
-        self.terminal_threads = QtCore.QThreadPool()
+        # self.threadpool = QtCore.QThreadPool()
+        # self.threadpool.setMaxThreadCount(100)
+        # self.scp_pool = QtCore.QThreadPool()
+        # self.scp_pool.setMaxThreadCount(5)
+        # self.backup_pool = QtCore.QThreadPool()
+        # self.backup_pool.setMaxThreadCount(10)
+        # self.vncviewer_threads = QtCore.QThreadPool()
+        # self.terminal_threads = QtCore.QThreadPool()
         self.setStyleSheet("font-size: 12px;")
 
     def initUI(self):
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
+            'debot': self.debot,
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
             'open_terminal_with_cmd': self.open_terminal_with_cmd,
-            # 'new_url_at_current_tab': self.new_url_at_current_tab,
-            'Send F5': lambda: self._exec_command(__XDOTOOL__ + ' F5'),
-            'Send Space': lambda: self._exec_command(__XDOTOOL__ + ' space'),
-            'Send Escape': lambda: self._exec_command(__XDOTOOL__ + ' Escape'),
+            'Send F5': lambda: self.exec_command(XDOTOOL + ' key F5'),
+            'Send Space': lambda: self.exec_command(XDOTOOL + ' key space'),
+            'Send Escape': lambda: self.exec_command(XDOTOOL + ' key Escape'),
             'send_key': self.send_key,
             'new': self.new_item,
             'edit': self.open_file,
@@ -218,19 +207,19 @@ class ThumbnailListViewer(QtWidgets.QListView):
         for k, v in self.actions.items():
             self.menu.addAction(k, v)
 
+    def selectedItems(self, select_all=False):
+        model = self.model()
+        if select_all is True:
+            return [model.itemAtRow(i) for i in range(0, model.rowCount())]
+        return [model.itemAtRow(i.row()) for i in self.selectedIndexes()]
+
+    def contextMenuEvent(self, event):
+        self.menu.popup(QtGui.QCursor.pos())
+        self.menu.exec_(QtGui.QCursor.pos())
+
     def force_update(self, index):
         rect = self.visualRect(index)
         self.viewport().update(rect)
-
-    def open_file(self):
-        for item in self.selectedItems():
-            p = str(item.get('filepath', ''))
-            if not p:
-                continue
-            try:
-                os.startfile(p)
-            except Exception:
-                logging.error('unable to open {}'.format(p))
 
     def scaleIcon(self, v):
         nw = int(ThumbnailListViewer.__LARGE_ICON_SIZE__.width() * v)
@@ -265,187 +254,9 @@ class ThumbnailListViewer(QtWidgets.QListView):
         self.setResizeMode(QtWidgets.QListView.Adjust)
         self.setSpacing(2)
 
-    def contextMenuEvent(self, event):
-        self.menu.popup(QtGui.QCursor.pos())
-        self.menu.exec_(QtGui.QCursor.pos())
-
     def __event2item__(self, event):
         row = self.rowAt(event.pos().y())
         return self.model().itemAtRow(row)
-
-    def selectedItems(self):
-        model = self.model()
-        return [model.itemAtRow(i.row()) for i in self.selectedIndexes()]
-
-    def _exec_command(self, command):
-        for item in self.selectedItems():
-            worker = Worker(item.exec_command, command)
-            self.threadpool.start(worker)
-
-    def exec_command(self):
-        dialog = ChooseCommandDialog(parent=self)
-        r = dialog.getResult()
-        if not r:
-            return
-        for item in self.selectedItems():
-            logging.info("try to send command {} to {}".format(r, str(item)))
-            worker = Worker(item.exec_command, r)
-            self.threadpool.start(worker)
-
-    def new_item(self):
-        dialog = SSHInputDialog(parent=self)
-        r = dialog.getResult()
-        if not r:
-            return
-        for f in r:
-            item = load_ssh_file(f)
-            item.info['filepath'] = str(r)
-            self.model().appendItem(item)
-
-    def open_vncviewer(self):
-        for item in self.selectedItems():
-            worker = Worker(item.open_vncviewer)
-            self.vncviewer_threads.start(worker)
-
-    def open_terminal_with_cmd(self):
-        text, okPressed = QtWidgets.QInputDialog.getText(
-                self, "CMD", "CMD",
-                QtWidgets.QLineEdit.Normal, "")
-        if not okPressed:
-            return
-        for item in self.selectedItems():
-            worker = Worker(item.invoke_shell, text)
-            self.terminal_threads.start(worker)
-
-    def open_terminal(self, cmd=None):
-        for item in self.selectedItems():
-            worker = Worker(item.invoke_shell, cmd)
-            self.terminal_threads.start(worker)
-
-    def copy_ssh_cmd(self):
-        t = []
-        for item in self.selectedItems():
-            t.append(item.cmdline())
-        t = [i.cmdline() for i in self.selectedItems()]
-        clipboard = QtWidgets.QApplication.clipboard()
-        clipboard.clear(mode=clipboard.Clipboard)
-        clipboard.setText("\n".join(t), mode=clipboard.Clipboard)
-
-    def copy_hostaddress(self):
-        items = self.selectedItems()
-        t = [i.hostaddress() for i in items]
-        clipboard = QtWidgets.QApplication.clipboard()
-        clipboard.clear(mode=clipboard.Clipboard)
-        clipboard.setText("\n".join(t), mode=clipboard.Clipboard)
-
-    def force_reconnect(self):
-        for item in self.selectedItems():
-            item.force_reconnect()
-
-    def reload_config(self):
-        for item in self.selectedItems():
-            item.reloadConfig()
-
-    def open_log(self):
-        for item in self.selectedItems():
-            worker = Worker(os.startfile, item.logFile)
-            self.terminal_threads.start(worker)
-
-    def upload(self, path='~/.ytv'):
-        dialog = SCPDialog(download=False)
-        dialog.widgets['dst_path']['widget'].setText(path)
-        info = dialog.getResult()
-        if not info:
-            return
-        for item in self.selectedItems():
-            worker = Worker(
-                        item.upload_by_subprocess,
-                        recursive=False,
-                        src_path=info['src_path'],
-                        dst_path=info['dst_path'])
-
-            self.scp_pool.start(worker)
-
-    def backup(self):
-        d = QtWidgets.QFileDialog.getExistingDirectory(self, "Open Files")
-        if not d:
-            return
-
-        for item in self.selectedItems():
-            worker = Worker(item.backup, dst_path=d)
-            self.backup_pool.start(worker)
-
-    def download(self, path='.'):
-        dialog = SCPDialog(download=True)
-        dialog.widgets['dst_path']['widget'].setText(path)
-        info = dialog.getResult()
-        if not info:
-            return None
-        for item in self.selectedItems():
-            worker = Worker(
-                        item.download_by_subprocess,
-                        recursive=False,
-                        src_path=info['src_path'],
-                        dst_path=info['dst_path'])
-
-            self.scp_pool.start(worker)
-
-    def new_url_at_current_tab(self):
-        text, okPressed = QtWidgets.QInputDialog.getText(
-                self, "URL", "URL",
-                QtWidgets.QLineEdit.Normal, "")
-        url = text.strip()
-        if not okPressed or not url:
-            return
-        cmd = '{0} key "ctrl+l" && {0} type --delay 100 "{1}" && {0} key Return'.format(__XDOTOOL__, url)
-        for item in self.selectedItems():
-            worker = Worker(item.exec_command, cmd)
-            self.threadpool.start(worker)
-
-    def send_key(self):
-        items = ("Escape", "F5", "space", "Return", "f", "ctrl+w", "ctrl+q")
-        item, okPressed = QtWidgets.QInputDialog.getItem(
-                self,
-                "Send key", "Key", items, 0, False)
-        if okPressed and item:
-            cmd = '{} key {}'.format(__XDOTOOL__, item)
-            for item in self.selectedItems():
-                worker = Worker(item.exec_command, cmd)
-                self.threadpool.start(worker)
-
-    def open(self):
-        self.open_vncviewer()
-
-    def close(self):
-        for item in self.selectedItems():
-            item.close()
-
-    def move_to_trash(self):
-        for item in self.selectedItems():
-            p = item.get('filepath')
-            if not p:
-                continue
-            dirname = os.path.join(os.path.dirname(p), 'Trash')
-            os.makedirs(dirname, exist_ok=True)
-            newfile = os.path.join(dirname, os.path.basename(p))
-            try:
-                os.rename(p, newfile)
-            except Exception as e:
-                logging.error(e, exc_info=True)
-            try:
-                self.model().removeItem(item)
-            except Exception as e:
-                logging.error(e, exc_info=True)
-
-    def install_sshkey(self):
-        f = QtWidgets.QFileDialog.getOpenFileName(self, "Open Files")
-        if not f[0]:
-            return False
-
-        if f[0]:
-            for item in self.selectedItems():
-                worker = Worker(item.install_sshkey, f[0])
-                self.threadpool.start(worker)
 
 
 def main():

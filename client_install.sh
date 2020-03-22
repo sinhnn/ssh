@@ -17,5 +17,5 @@ ofile=`basename $url`
 wget $url -O $ofile \
 	&& sudo apt update \
 	&& sudo apt install -y ./$ofile \
-	&& sudo apt install -y xorg xserver-xorg openbox obmenu tigervnc* wget curl firefox cifs-utils caja mate-terminal caja-open-terminal ffmpeg scrot xsel xdotool \
+	&& sudo apt install -y xorg xserver-xorg openbox obmenu tigervnc* wget curl firefox cifs-utils caja mate-terminal caja-open-terminal ffmpeg scrot xclip xsel xdotool fonts-ubuntu* fonts-noto*  fonts-indic \
 	&& echo '0' > .done

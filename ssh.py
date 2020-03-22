@@ -1,5 +1,6 @@
 import os
 import subprocess
+import datetime
 import threading
 import time
 import re
@@ -30,6 +31,8 @@ from platform_ssh import (
 )
 
 SSH_MAX_FAILED = 100
+SSH_TUNNEL_START = 6000
+SSH_TUNNEL_END = 10000
 REMOTE_BIND_ADDRESS = ("127.0.0.1", 5901)
 SCREENSHOT_FILE = '~/screenshot_1'
 SCREENSHOT_THUMB = '~/screenshot_1-thumb.jpg'
@@ -166,6 +169,8 @@ class SSHClient(object):
         self.portscanner = PortScanner()
 
         # self._client = self.connect()
+        self._ssh_client = None
+        self._thumbnail_session = None
         self.changed = []
         self.status = {
             'lastcmd': FakeStdOut(
@@ -230,6 +235,21 @@ class SSHClient(object):
         except Exception as e:
             self.log(e, exc_info=True, level=logging.ERROR)
         return False
+
+    def watch_file(self, name, cmd):
+        if not self._client:
+            self.status[name] = 'no ssh session'
+
+        (rcmd, rout, rerr) = self.exec_command(command=cmd, new=False)
+        self.status[name] = ''.join(rout + rerr)
+        self.changed.append(name)
+        return self.status[name]
+
+    def __robot__(self):
+        return self.watch_file(self, 'robot', 'cat ~/.ytv/robot.txt')
+
+    def __curl__(self):
+        return self.watch_file(self, 'curl', 'cat ~/.ytv/status.txt')
 
     def update_server_info(self):
         paths = ' '.join([v.remote_path for k, v in self.encrypted.items()])
@@ -302,9 +322,15 @@ class SSHClient(object):
         self.status['ytvlog'].write(''.join(out + err))
 
     def __str__(self):
-        return '{}\n{}'.format(
-                self.config['hostname'],
-                ','.join(self.info['tags']))
+        return '{}'.format(self.config['hostname'])
+
+    def allproc(self):
+        allproc = []
+        for p in [self.tunnels, self.tunnel_proc, self.processes, self.exec_command_list]:
+            if len(p):
+                allproc.extend(p)
+        text = ''.join(list(map(str, allproc)))
+        return text
 
     def __daemon__(self):
         for t in [self.update_vncthumnail]:
@@ -351,6 +377,14 @@ class SSHClient(object):
             return self.info[k]
         elif k in self.encrypted.keys():
             return self.encrypted[k]
+        elif k == 'allproc':
+            return self.allproc()
+        elif k == 'lastupdate':
+            return self.lastupdate
+        elif k == 'curl':
+            return self.__curl__()
+        elif k == 'robot':
+            return self.__robot__()
         return default
 
     def update(self, k, v):
@@ -384,6 +418,7 @@ class SSHClient(object):
         thread.daemon = True
         thread.start()
         self.threads.append(thread)
+        self.changed.append('allproc')
 
     def __eq__(self, other):
         if all([
@@ -393,6 +428,7 @@ class SSHClient(object):
             return True
 
     def __del__(self):
+        print('closing all child processes')
         try:
             self.log('closing ssh client', level=logging.DEBUG)
             for t in self.tunnels:
@@ -445,13 +481,17 @@ class SSHClient(object):
         finally:
             return results
 
-    def download(self, remote_path, local_path, recursive=False, preserve_times=False):
+    def download(self, remote_path,  local_path, pclient=None, recursive=False, preserve_times=False):
         results = {'done': [], 'failed': []}
         try:
-            client = self.connect()
+            if pclient:
+                client = pclient
+            else:
+                client = self.connect()
             if not client:
+                self.log('no valid client to download file!')
                 return results
-            scp = SCPClient(client.get_transport())
+            scp = SCPClient(client.get_transport(), socket_timeout=50)
             try:
                 scp.get(remote_path, local_path, recursive, preserve_times)
                 results['done'].append(local_path)
@@ -462,7 +502,8 @@ class SSHClient(object):
                 results['failed'].append(local_path)
                 self.log(error, level=logging.ERROR, exc_info=True)
             scp.close()
-            client.close()
+            if not pclient:
+                client.close()
         except Exception as error:
             self.log(error, level=logging.ERROR, exc_info=True)
         return results
@@ -478,8 +519,9 @@ class SSHClient(object):
 
     def __rm_terminated_process__(self):
         self.processes = [proc for proc in self.processes if proc.is_running()]
+        self.changed.append('allproc')
 
-    def run_processes(self, args, store=False, **kwargs):
+    def run_processes(self, args, store=False, method="Popen", timeout=None, **kwargs):
         try:
             if not self.check_failed_connection():
                 return False
@@ -491,30 +533,36 @@ class SSHClient(object):
 
             if kwargs.get('creationflags') == subprocess.CREATE_NEW_CONSOLE:
                 args = OPEN_IN_TERMINAL + args
-            proc = psutil.Popen(args, **kwargs)
-            if kwargs.get('creationflags') == subprocess.CREATE_NEW_CONSOLE:
-                return 0
-            self.processes.append(proc)
 
-            if kwargs.get('stdout') == subprocess.PIPE:
-                o, e = proc.communicate(timeout=30)
-                if store is True:
-                    self.status['msg'].write(o)
-                    self.status['error'].write(e)
+            if method == "Popen":
+                proc = psutil.Popen(args, **kwargs)
+                if kwargs.get('creationflags') == subprocess.CREATE_NEW_CONSOLE:
+                    return 0
+                self.processes.append(proc)
+                self.changed.append('allproc')
+
                 if kwargs.get('stdout') == subprocess.PIPE:
-                    if o:
+                    o, e = proc.communicate(timeout=30)
+                    if store is True:
+                        self.status['msg'].write(o)
+                        self.status['error'].write(e)
+                    if kwargs.get('stdout') == subprocess.PIPE and o:
                         self.log('{}\n{}'.format(" ".join(args), o))
-                if kwargs.get('stderr') == subprocess.PIPE:
-                    if e:
-                        self.log(
-                            '{}\n{}'.format(" ".join(args), e.decode('utf-8')),
-                            level=logging.ERROR)
-
-            proc.wait()
-            return proc.returncode
+                    if kwargs.get('stderr') == subprocess.PIPE and e:
+                        self.log('{}\n{}'.format(" ".join(args), e.decode('utf-8')), level=logging.ERROR)
+                if timeout is not None:
+                    proc.wait(timeout)
+                else:
+                    proc.wait()
+                self.changed.append('allproc')
+                return proc.returncode
+            else:
+                returncode = subprocess.call(args, **kwargs)
+                return returncode
         except Exception as e:
             if store is True:
                 self.status['error'].write(e)
+            self.changed.append('allproc')
             return -1
 
     def scp_by_subprocess(self, src_path, dst_path, recursive=False, quiet=False, tries=3, **kwargs):
@@ -630,10 +678,9 @@ class SSHClient(object):
     # https://sshtunnel.readthedocs.io/en/latest/
     def create_tunnel(self, port=None, **kwargs):
         # ERROR: Multiple ssh at same time will take the same port
-        port = self.portscanner.getAvailablePort(range(6000+self.id*5, 10000))
-        self.log(
-                'creating tunnel via port {}'.format(port),
-                level=logging.INFO)
+        port = self.portscanner.getAvailablePort(
+                range(SSH_TUNNEL_START+self.id*5, SSH_TUNNEL_END))
+        self.log('creating tunnel via port {}'.format(port))
         try:
             local_bind_address = ('127.0.0.1', port)
             tunnel = SSHTunnelForwarder(
@@ -735,7 +782,7 @@ class SSHClient(object):
                 self.exec_command_list.remove(c)
                 return
 
-    def exec_command(self, command, new=True, store=False, background=False, log=True):
+    def exec_command(self, command, new=True, pclient=None, store=False, background=False, log=True):
         if not self.check_failed_connection():
             if store:
                 self.status['msg'].write('failed to connect')
@@ -746,7 +793,9 @@ class SSHClient(object):
                 self.status['msg'].write('duplicated task')
             return (False, [], [])
 
-        if new is True:
+        if pclient:
+            client = pclient
+        elif new is True:
             client = self.connect()
         else:
             client = self._client
@@ -761,6 +810,7 @@ class SSHClient(object):
         cid = self.exec_command_cid
         self.exec_command_cid += 1
         self.exec_command_list.append([cid, command, 0])
+        self.changed.append('allproc')
 
         self.log('paramiko: {}'.format(command), level=logging.INFO)
         try:
@@ -768,6 +818,7 @@ class SSHClient(object):
         except Exception as e:
             self.log(e, level=logging.ERROR)
             self.__rm_exec_command_list_id__(cid)
+            self.changed.append('allproc')
             return (False, [], [])
         if store:
             self.status['lastcmd'].write(command)
@@ -778,6 +829,7 @@ class SSHClient(object):
             if new is True:
                 client.close()
             self.__rm_exec_command_list_id__(cid)
+            self.changed.append('allproc')
             return (command, [], [])
 
         r_out = []
@@ -805,10 +857,7 @@ class SSHClient(object):
                 r_err.extend(err)
                 if len(err):
                     i = 0
-                    self.log("{}\n{}".format(
-                        command, ''.join(err)),
-                        level=logging.ERROR)
-
+                    self.log("{}\n{}".format(command, ''.join(err)), level=logging.ERROR)
                 if store:
                     if len(out):
                         self.status['msg'].write(''.join(out).strip())
@@ -824,6 +873,7 @@ class SSHClient(object):
             except Exception as e:
                 self.log(e, level=logging.ERROR, exc_info=True)
                 self.__rm_exec_command_list_id__(cid)
+                self.changed.append('allproc')
                 return (False, [], [])
 
         if str(self.status['msg']) == str(self.status['lastcmd']):
@@ -833,6 +883,7 @@ class SSHClient(object):
         if new is True:
             client.close()
         self.__rm_exec_command_list_id__(cid)
+        self.changed.append('allproc')
         return (command, r_out, r_err)
 
     def invoke_shell(self, command=None):
@@ -856,16 +907,16 @@ class SSHClient(object):
         for t in self.tunnels:
             if not isinstance(t, SSHTunnelForwarder):
                 continue
-            if all([
-              t.is_alive(),
-              t.get("remote_bind_address") == REMOTE_BIND_ADDRESS
-              ]):
+            self.log("validating tunnel {}".format(str(t)))
+            if all([t.get("remote_bind_address") == REMOTE_BIND_ADDRESS]):
+                if not t.alive():
+                    self.log('restartting tunnel {}'.format(str(t)))
+                    t.start()
+                    time.sleep(1)
                 ts.append(t)
-        ts += [t for t in self.tunnel_proc if t.is_running()]
-
-        if ts:
-            self.log("Found running tunnel", level=logging.INFO)
-        if not ts:
+        # ts += [t for t in self.tunnel_proc if t.is_running()]
+        self.log("availabel tunnels: {} ".format(ts), level=logging.DEBUG)
+        if len(ts) == 0:
             _ = self.create_tunnel(remote_bind_address=REMOTE_BIND_ADDRESS)
             if _:
                 ts.append(_)
@@ -873,30 +924,47 @@ class SSHClient(object):
 
     def open_vncviewer(self):
         try:
-            self.create_vncserver(1)
+            self.create_vncserver(self.get("X", 1))
             ts = self.__get_vnctunnel__()
             if not ts:
                 self.log("no tunnel found", level=logging.ERROR)
                 return False
-            if ts[0]:
-                self.log("Openning vncviewer")
-                subprocess.call([VNCVIEWER, ts[0].local_bind_address_str()])
-                try:
-                    ts[0].stop()
-                except Exception as e:
-                    logging.debug(e, exc_info=True)
-                    ts[0].terminate()
-
+            tunnel = ts[0]
+            if tunnel:
+                self.log('open vncviewer via {}'.format(str(tunnel)))
+                subprocess.call([VNCVIEWER, tunnel.local_bind_address_str()])
+                tunnel.stop()
+                # try:
+                #     tunnel.stop()
+                # except Exception as e:
+                #     logging.debug(e, exc_info=True)
+                #     tunnel.terminate()
+                # try:
+                #     del tunnel
+                # except Exception as e:
+                #     print('ERROR {} while deleting {}'.format(e, str(tunnel)))
         except FileNotFoundError:
             self.log('vncviewer not found', level=logging.ERROR)
         except Exception as e:
             self.log(e, level=logging.ERROR, exc_info=True)
+        self.changed.append('allproc')
 
     def update_vncthumnail(self):
         if not self.updating_thumbnail:
             self.log("updating thumbnail", level=logging.DEBUG)
             self.updating_thumbnail = True
-            self.vncscreenshot_subprocess()
+
+            if not self._thumbnail_session:
+                self._thumbnail_session = self.connect()
+            try:
+                if self._thumbnail_session.get_transport() is None:
+                    self._thumbnail_session = self.connect()
+            except Exception:
+                self._thumbnail_session = self.connect()
+
+            r = self.vncscreenshot_subprocess()
+            if r:
+                self.lastupdate = datetime.datetime.now().strftime("%H:%M:%S")
             self.updating_thumbnail = False
             return True
         else:
@@ -909,6 +977,7 @@ class SSHClient(object):
 
     def vncscreenshot(self):
         local_path = self.cached_path(self.config['hostname'] + '.jpg')
+        # command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         if command in [False, None]:
             delete_file(local_path)
@@ -926,27 +995,39 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path = self.cached_path(self.config['hostname'] + '.jpg')
-        (command, out, err) = self.exec_command(CMD_SCREENSHOT, log=False)
-
+        (command, out, err) = self.exec_command(CMD_SCREENSHOT, pclient=self._thumbnail_session, log=False)
         msg = "giblib error: Can't open X display. It *is* running, yeah?\n"
         if msg in err:
-            self.create_vncserver(1)
+            self.create_vncserver(self.get("X", 1))
             time.sleep(1)
 
         if command in [False, None]:
             delete_file(local_path)
             return self.__delete_screen__()
 
+        # r = self.download(
+        #     src_path='screenshot_1-thumb.jpg',
+        #     dst_path=local_path,
+        #     pclient=self._thumbnail_session
+        # )
+        # if len(r['failed']) > 0 or len(r['done']) == 0:
+        #     delete_file(local_path)
+        #     return self.__delete_screen__()
+        # self.status['screen'] = local_path
+
         returncode = self.download_by_subprocess(
                 src_path='screenshot_1-thumb.jpg',
                 dst_path=local_path,
-                stdout=subprocess.DEVNULL)
+                stdout=subprocess.DEVNULL,
+                timeout=30
+        )
 
         if returncode != 0:
             delete_file(local_path)
             return self.__delete_screen__()
 
         self.status['screen'] = local_path
+        return (returncode == 0)
 
     def create_vncserver(self, x):
         (c, out, err) = self.exec_command(CMD_RUN_VNCSERVER_IF_NEED, log=False)
@@ -1000,6 +1081,42 @@ class SSHClient(object):
             if display and pid:
                 result.append((display, pid))
         return result
+
+
+def load_ssh_dir(dir):
+    results = []
+    for entry in os.scandir(dir):
+        if entry.is_dir():
+            continue
+        if not re.search(r'.json$', entry.name):
+            continue
+
+        try:
+            server = load_ssh_file(entry.path)
+            if server:
+                server.info['filepath'] = os.path.abspath(entry.path)
+                results.append(server)
+        except Exception:
+            pass
+    return results
+
+
+def load_ssh_file(path):
+    try:
+        fp = open(path, 'r')
+        info = json.load(fp)
+        fp.close()
+        client = SSHClient(info=info, fileConfig=path)
+        if client.is_valid():
+            return client
+        return {}
+    except Exception:
+        logging.error('unable to load file {}\n{}'.format(path), exc_info=True)
+        return {}
+    # return None
+
+
+
 
 
 if __name__ == "__main__":

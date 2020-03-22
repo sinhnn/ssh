@@ -80,12 +80,33 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         time.sleep(1)
         return proc
 
-    def is_alive(self):
+    def alive(self):
         try:
-            return sshtunnel.SSHTunnelForwarder.is_alive()
+            r = self.is_alive()
+            return r
         except Exception as e:
             logging.debug(e, exc_info=True)
             for proc in self.tunnel_proc:
                 if proc.is_running():
                     return True
+        logging.info(self.__str__() + ' is dead')
         return False
+
+    # def is_alive(self):
+    #     try:
+    #         r = sshtunnel.SSHTunnelForwarder.is_alive(self)
+    #         return r
+    #     except Exception as e:
+    #         logging.debug(e, exc_info=True)
+    #         for proc in self.tunnel_proc:
+    #             if proc.is_running():
+    #                 return True
+    #     logging.info(self.__str__() + ' is dead')
+    #     return False
+
+
+    def __str__(self):
+        return 'Tunnel({}->{})'.format(
+                self.get('local_bind_port'),
+                self.get('remote_bind_address')[1]
+        )

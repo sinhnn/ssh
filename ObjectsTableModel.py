@@ -97,6 +97,10 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         super(ObjectsTableModel, self).__init__(**kwargs)
         self._header = [
                 'hostname',
+                'lastupdate',
+                # 'status',
+                # 'robot',
+                'allproc',
                 'data',
                 'next_data',
                 'email',
@@ -196,7 +200,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         s = self.rowCount() - 1
         self.beginInsertRows(QModelIndex(), s, s)
         self._data.append(item)
-        self.__update_header__()
+        # self.__update_header__()
         self.endInsertRows()
         return True
 

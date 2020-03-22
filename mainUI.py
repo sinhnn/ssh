@@ -67,6 +67,11 @@ class MainFrame(QtWidgets.QMainWindow):
         self._widgets.setIconView()
         self._widgets.model().fupate.connect(self._widgets.force_update)
 
+        setUpdatePeriod = QtWidgets.QLineEdit(self)
+        setUpdatePeriod.setPlaceholderText(str(model.delay))
+        setUpdatePeriod.setMaximumWidth(40)
+        setUpdatePeriod.editingFinished.connect(self.set_delay)
+
         self.search = QtWidgets.QLineEdit(self)
         self.search.setPlaceholderText("Enter address/tags to search")
         self.search.textChanged.connect(self.on_search)
@@ -130,8 +135,14 @@ class MainFrame(QtWidgets.QMainWindow):
         self.toolbar.addAction(self.detailViewAction)
         self.toolbar.addAction(self.openSSHTableAction)
         self.toolbar.addWidget(self.scale)
+
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(setUpdatePeriod)
+        self.toolbar.addWidget(QtWidgets.QLabel("Update Period"))
+
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.search)
+
         self.toolbar.addAction(self.sortByNameAction)
         self.toolbar.addAction(self.sortByStatusAction)
         self.toolbar.addSeparator()
@@ -145,6 +156,14 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addSeparator()
 
         self.setWindowTitle("SSH-VNC {}".format(self.dir))
+        self.setUpdatePeriod = setUpdatePeriod
+
+    def set_delay(self):
+        try:
+            d = int(self.setUpdatePeriod.text())
+            self._widgets.model().delay = d
+        except Exception:
+            return
 
     def on_exit(self):
         common.close_all = True
