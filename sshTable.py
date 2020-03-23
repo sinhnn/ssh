@@ -182,6 +182,7 @@ class SSHTable(SSHActions, QTableView):
             'update_url': self.update_url,
             'update_server_info': self.update_info,
             'command': self.exec_command,
+            'debot': self.debot,
             'edit': self.open_file,
             'upload': self.upload,
             'download': self.download,

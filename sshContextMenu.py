@@ -49,7 +49,7 @@ class SSHActions(object):
         # items = self.selectedItems()
         self.exec_command('DISPLAY=:1 xdotool mousemove 56 223 click 1')
         self.open_vncviewer()
-        self.exec_command('rm -f ~/.ytv/robot.txt')
+        # self.exec_command('rm -f ~/.ytv/robot.txt')
 
     def selectedItems(self, select_all=False):
         return []

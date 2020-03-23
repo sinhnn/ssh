@@ -182,14 +182,14 @@ class ThumbnailListViewer(SSHActions, QtWidgets.QListView):
     def initUI(self):
         self.menu = QtWidgets.QMenu(self)
         self.actions = {
-            'debot': self.debot,
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
-            'open_terminal_with_cmd': self.open_terminal_with_cmd,
+            'debot': self.debot,
             'Send F5': lambda: self.exec_command(XDOTOOL + ' key F5'),
             'Send Space': lambda: self.exec_command(XDOTOOL + ' key space'),
             'Send Escape': lambda: self.exec_command(XDOTOOL + ' key Escape'),
             'send_key': self.send_key,
+            'open_terminal_with_cmd': self.open_terminal_with_cmd,
             'new': self.new_item,
             'edit': self.open_file,
             'upload': self.upload,

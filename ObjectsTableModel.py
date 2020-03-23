@@ -98,8 +98,8 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         self._header = [
                 'hostname',
                 'lastupdate',
-                # 'status',
-                # 'robot',
+                'status',
+                'robot',
                 'allproc',
                 'data',
                 'next_data',
@@ -131,7 +131,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
     def _dataChanged(self):
         while True:
             for i, c in enumerate(self._data):
-                for info in c.changed:
+                for info in c.changed + ['robot', 'url']:
                     if info not in self._header:
                         continue
                     index3 = self.createIndex(i, self._header.index(info))
@@ -141,7 +141,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                     except AttributeError:
                         pass
                     c.changed.remove(info)
-            time.sleep(0.1)
+            time.sleep(1)
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)
