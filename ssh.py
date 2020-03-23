@@ -188,7 +188,9 @@ class SSHClient(object):
             'error': FakeStdOut(
                 name='error',
                 file_=self.cached_path('error'),
-                parent=self)
+                parent=self),
+            'robot': lambda: str(self.__robot__()),
+            'status': lambda: str(self.__curl__()),
         }
 
         self.encrypted = {
@@ -371,20 +373,20 @@ class SSHClient(object):
         '''get status/configuration key'''
         if k in self.config.keys():
             return self.config[k]
+        elif k == 'allproc':
+            return self.allproc()
+        elif k == 'lastupdate':
+            return self.lastupdate
+        # elif k == 'curl':
+            # return self.__curl__()
+        # elif k == 'robot':
+            # return self.__robot__()
         elif k in self.status.keys():
             return self.status[k]
         elif k in self.info.keys():
             return self.info[k]
         elif k in self.encrypted.keys():
             return self.encrypted[k]
-        elif k == 'allproc':
-            return self.allproc()
-        elif k == 'lastupdate':
-            return self.lastupdate
-        elif k == 'curl':
-            return self.__curl__()
-        elif k == 'robot':
-            return self.__robot__()
         return default
 
     def update(self, k, v):
