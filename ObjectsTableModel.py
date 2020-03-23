@@ -140,7 +140,8 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                         self.fupate.emit(index3)
                     except AttributeError:
                         pass
-                    c.changed.remove(info)
+                    if info in c.changed:
+                        c.changed.remove(info)
             time.sleep(1)
 
     def rowCount(self, parent=QModelIndex()):
