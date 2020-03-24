@@ -806,7 +806,7 @@ class SSHClient(object):
             return False
         if client.get_transport() is None:
             return False
-        if not client.get_transport.is_active():
+        if not client.get_transport().is_active():
             return False
 
         return True
