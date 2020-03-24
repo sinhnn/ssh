@@ -50,6 +50,7 @@ class SSHActions(object):
         item.open_vncviewer()
         item.exec_command('rm -f ~/.ytv/robot.txt')
         item.is_robot()
+        item.update_vncthumnail()
 
     def debot(self):
         for item in self.selectedItems():

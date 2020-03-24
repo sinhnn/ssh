@@ -11,6 +11,9 @@ import threading
 import time
 
 
+from common import close_all
+
+
 class ComboBoxModel(QtCore.QAbstractItemModel):
     '''
         Model list of item for Combobox
@@ -130,7 +133,9 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
 
     def _dataChanged(self):
         firstRun = True
-        while True:
+        while not close_all:
+            # if close_all is True:
+                # break
             for i, c in enumerate(self._data):
                 if not firstRun:
                     c.is_robot()

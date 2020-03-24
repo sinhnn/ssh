@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 # from PyQt5.QtGui import QIcon
+from common import close_all
 from PyQt5 import QtGui, QtCore, QtWidgets
 # from PyQt5.QtCore import pyqtSlot
 from ObjectsTableModel import (
@@ -303,6 +304,9 @@ class SSHWidget(QtWidgets.QWidget):
                     self.tableview.scp_pool.activeThreadCount(),
                     self.tableview.backup_pool.activeThreadCount()
                     ))
+
+            if close_all is True:
+                break
             time.sleep(1)
 
     def refreshLog(self):
@@ -317,6 +321,8 @@ class SSHWidget(QtWidgets.QWidget):
                 except Exception as e:
                     logging.error('unable to get log at item {}'.format(i))
                     logging.error(e, exc_info=True)
+            if close_all is True:
+                break
             time.sleep(5)
 
     def daemon(self):

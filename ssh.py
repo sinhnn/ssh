@@ -169,7 +169,7 @@ class SSHClient(object):
         self.portscanner = PortScanner()
 
         self._client = None
-        self._ssh_client = None
+        # self._ssh_client = None
         self._thumbnail_session = None
         self.changed = []
         self.status = {
@@ -244,7 +244,7 @@ class SSHClient(object):
             return self.status[name]
 
         if not self._client:
-            self._client = self.connect()
+            self._client = self.create_new_connection()
             self.watch_file(name, cmd, tries-1)
 
         (rcmd, rout, rerr) = self.exec_command(command=cmd, new=False)
@@ -271,6 +271,9 @@ class SSHClient(object):
         for k, v in self.encrypted.items():
             v.decrypt()
             self.changed.append(k)
+
+        self.is_robot()
+        self.get_curl()
         return True
 
     def cached_path(self, name=None):
@@ -476,7 +479,7 @@ class SSHClient(object):
                 level=logging.INFO)
         results = {'done': [], 'failed': []}
         try:
-            client = self.connect()
+            client = self.create_new_connection()
             if not client:
                 return results
             scp = SCPClient(client.get_transport())
@@ -501,7 +504,7 @@ class SSHClient(object):
             if pclient:
                 client = pclient
             else:
-                client = self.connect()
+                client = self.create_new_connection()
             if not client:
                 self.log('no valid client to download file!')
                 return results
@@ -660,7 +663,7 @@ class SSHClient(object):
                             dst_path))
         return r
 
-    def connect(self, client=None, tries=2):
+    def create_new_connection(self, client=None, tries=2):
         if not self.is_valid():
             return False
         if tries <= 0:
@@ -678,11 +681,11 @@ class SSHClient(object):
             return client
         except TimeoutError:
             self.__delete_screen__()
-            return self.connect(client=client, tries=tries-1)
+            return self.create_new_connection(client=client, tries=tries-1)
         except socket.timeout:
-            return self.connect(client=client, tries=tries-1)
+            return self.create_new_connection(client=client, tries=tries-1)
         except paramiko.ssh_exception.SSHException:
-            return self.connect(client=client, tries=tries-1)
+            return self.create_new_connection(client=client, tries=tries-1)
         except Exception:
             self.log(
                     'unable to connect from {}'.format(self.config),
@@ -796,7 +799,19 @@ class SSHClient(object):
                 self.exec_command_list.remove(c)
                 return
 
-    def exec_command(self, command, new=True, pclient=None, store=False, background=False, log=True):
+    def check_client_connection(self, client):
+        if not isinstance(client, paramiko.SSHClient):
+            return None
+        if not client:
+            return False
+        if client.get_transport() is None:
+            return False
+        if not client.get_transport.is_active():
+            return False
+
+        return True
+
+    def exec_command(self, command, new=True, pclient=None, store=False, background=False, log=True, tries=2):
         if not self.check_failed_connection():
             if store:
                 self.status['msg'].write('failed to connect')
@@ -810,12 +825,14 @@ class SSHClient(object):
         if pclient:
             client = pclient
         elif new is True:
-            client = self.connect()
+            client = self.create_new_connection()
         else:
             client = self._client
 
-        if not client:
-            return (False, [], [])
+        if self.check_client_connection(client) is None:
+            client = self.create_new_connection()
+        elif self.check_client_connection(client) is False:
+            client.connect(timeout=5.0, **self.config)
 
         if re.search(r'&\s*$', command):
             command = re.sub(r'&\s*$', '', command)
@@ -833,7 +850,7 @@ class SSHClient(object):
             self.log(e, level=logging.ERROR)
             self.__rm_exec_command_list_id__(cid)
             self.changed.append('allproc')
-            return (False, [], [])
+            return (False, [], [e])
         if store:
             self.status['lastcmd'].write(command)
             self.status['msg'].write(command)
@@ -948,15 +965,6 @@ class SSHClient(object):
                 self.log('open vncviewer via {}'.format(str(tunnel)))
                 subprocess.call([VNCVIEWER, tunnel.local_bind_address_str()])
                 tunnel.stop()
-                # try:
-                #     tunnel.stop()
-                # except Exception as e:
-                #     logging.debug(e, exc_info=True)
-                #     tunnel.terminate()
-                # try:
-                #     del tunnel
-                # except Exception as e:
-                #     print('ERROR {} while deleting {}'.format(e, str(tunnel)))
         except FileNotFoundError:
             self.log('vncviewer not found', level=logging.ERROR)
         except Exception as e:
@@ -969,12 +977,12 @@ class SSHClient(object):
             self.updating_thumbnail = True
 
             if not self._thumbnail_session:
-                self._thumbnail_session = self.connect()
+                self._thumbnail_session = self.create_new_connection()
             try:
                 if self._thumbnail_session.get_transport() is None:
-                    self._thumbnail_session = self.connect()
+                    self._thumbnail_session = self.create_new_connection()
             except Exception:
-                self._thumbnail_session = self.connect()
+                self._thumbnail_session = self.create_new_connection()
 
             r = self.vncscreenshot_subprocess()
             if r:
@@ -991,7 +999,6 @@ class SSHClient(object):
 
     def vncscreenshot(self):
         local_path = self.cached_path(self.config['hostname'] + '.jpg')
-        # command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         command = self.exec_command(CMD_SCREENSHOT, log=False)[0]
         if command in [False, None]:
             delete_file(local_path)
@@ -1009,7 +1016,10 @@ class SSHClient(object):
 
     def vncscreenshot_subprocess(self):
         local_path = self.cached_path(self.config['hostname'] + '.jpg')
-        (command, out, err) = self.exec_command(CMD_SCREENSHOT, pclient=self._thumbnail_session, log=False)
+        (command, out, err) = self.exec_command(
+                CMD_SCREENSHOT,
+                pclient=self._thumbnail_session,
+                log=False)
         msg = "giblib error: Can't open X display. It *is* running, yeah?\n"
         if msg in err:
             self.create_vncserver(self.get("X", 1))
@@ -1018,16 +1028,6 @@ class SSHClient(object):
         if command in [False, None]:
             delete_file(local_path)
             return self.__delete_screen__()
-
-        # r = self.download(
-        #     src_path='screenshot_1-thumb.jpg',
-        #     dst_path=local_path,
-        #     pclient=self._thumbnail_session
-        # )
-        # if len(r['failed']) > 0 or len(r['done']) == 0:
-        #     delete_file(local_path)
-        #     return self.__delete_screen__()
-        # self.status['screen'] = local_path
 
         returncode = self.download_by_subprocess(
                 src_path='screenshot_1-thumb.jpg',
@@ -1128,10 +1128,6 @@ def load_ssh_file(path):
         logging.error('unable to load file {}\n{}'.format(path), exc_info=True)
         return {}
     # return None
-
-
-
-
 
 if __name__ == "__main__":
     pass
