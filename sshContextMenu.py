@@ -45,18 +45,21 @@ class SSHActions(object):
         for f in [self.threadpool, self.scp_pool, self.backup_pool]:
             f.clear()
 
+    def __debot__(self, item):
+        item.exec_command('DISPLAY=:1 xdotool mousemove 56 223 click 1')
+        item.open_vncviewer()
+        item.exec_command('rm -f ~/.ytv/robot.txt')
+        item.is_robot()
+
     def debot(self):
-        # items = self.selectedItems()
-        self.exec_command('DISPLAY=:1 xdotool mousemove 56 223 click 1')
-        self.open_vncviewer()
-        # self.exec_command('rm -f ~/.ytv/robot.txt')
+        for item in self.selectedItems():
+            worker = Worker(self.__debot__, item)
+            self.vncviewer_threads.start(worker)
 
     def selectedItems(self, select_all=False):
         return []
 
     def open_vncviewer(self):
-        # if items is None:
-            # items = self.selectedItems()
         for item in self.selectedItems():
             worker = Worker(item.open_vncviewer)
             self.tasklist.append(worker)

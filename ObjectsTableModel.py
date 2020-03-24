@@ -98,7 +98,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         self._header = [
                 'hostname',
                 'lastupdate',
-                'status',
+                'curl',
                 'robot',
                 'allproc',
                 'data',
@@ -129,9 +129,15 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
             threads[-1].start()
 
     def _dataChanged(self):
+        firstRun = True
         while True:
             for i, c in enumerate(self._data):
-                for info in c.changed + ['robot', 'url']:
+                if not firstRun:
+                    c.is_robot()
+                    c.get_curl()
+                    c.changed.extend(['robot', 'curl'])
+
+                for info in c.changed:
                     if info not in self._header:
                         continue
                     index3 = self.createIndex(i, self._header.index(info))
@@ -143,6 +149,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                     if info in c.changed:
                         c.changed.remove(info)
             time.sleep(1)
+            firstRun = False
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)

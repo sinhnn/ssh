@@ -168,7 +168,7 @@ class SSHClient(object):
         self.initLogger()
         self.portscanner = PortScanner()
 
-        # self._client = self.connect()
+        self._client = None
         self._ssh_client = None
         self._thumbnail_session = None
         self.changed = []
@@ -189,8 +189,8 @@ class SSHClient(object):
                 name='error',
                 file_=self.cached_path('error'),
                 parent=self),
-            'robot': lambda: str(self.__robot__()),
-            'status': lambda: str(self.__curl__()),
+            'robot': '',
+            'curl': ''
         }
 
         self.encrypted = {
@@ -238,20 +238,27 @@ class SSHClient(object):
             self.log(e, exc_info=True, level=logging.ERROR)
         return False
 
-    def watch_file(self, name, cmd):
-        if not self._client:
+    def watch_file(self, name, cmd, tries=2):
+        if tries <= 0:
             self.status[name] = 'no ssh session'
+            return self.status[name]
+
+        if not self._client:
+            self._client = self.connect()
+            self.watch_file(name, cmd, tries-1)
 
         (rcmd, rout, rerr) = self.exec_command(command=cmd, new=False)
         self.status[name] = ''.join(rout + rerr)
         self.changed.append(name)
         return self.status[name]
 
-    def __robot__(self):
-        return self.watch_file(self, 'robot', 'cat ~/.ytv/robot.txt')
+    def is_robot(self):
+        r = self.watch_file('robot', 'cat ~/.ytv/robot.txt')
+        return str(r)
 
-    def __curl__(self):
-        return self.watch_file(self, 'curl', 'cat ~/.ytv/status.txt')
+    def get_curl(self):
+        r = self.watch_file('curl', 'cat ~/.ytv/status.txt')
+        return str(r)
 
     def update_server_info(self):
         paths = ' '.join([v.remote_path for k, v in self.encrypted.items()])
@@ -371,23 +378,28 @@ class SSHClient(object):
 
     def get(self, k, default=None):
         '''get status/configuration key'''
+        r = default
         if k in self.config.keys():
-            return self.config[k]
+            r = self.config[k]
         elif k == 'allproc':
-            return self.allproc()
+            r = self.allproc()
         elif k == 'lastupdate':
-            return self.lastupdate
+            r = self.lastupdate
         # elif k == 'curl':
-            # return self.__curl__()
+            # r = self.get_curl()
         # elif k == 'robot':
-            # return self.__robot__()
+            # r = self.is_robot()
         elif k in self.status.keys():
-            return self.status[k]
+            r = self.status[k]
         elif k in self.info.keys():
-            return self.info[k]
+            r = self.info[k]
         elif k in self.encrypted.keys():
-            return self.encrypted[k]
-        return default
+            r = self.encrypted[k]
+        if callable(r):
+            return r()
+        else:
+            return r
+        # return default
 
     def update(self, k, v):
         '''update configuration keys'''

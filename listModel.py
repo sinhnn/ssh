@@ -28,7 +28,7 @@ class ListModel(QtCore.QAbstractListModel):
         self.__data__ = data
         self.__auto_update__ = auto_update
 
-        self.delay = 5
+        self._updatePeriod = 60
         self.threadpool = QtCore.QThreadPool()
         self.threadpool.setMaxThreadCount(50)
         self.threadpool.waitForDone(-1)
@@ -38,6 +38,12 @@ class ListModel(QtCore.QAbstractListModel):
 
         self.__updating_item__ = []
         self.__role__ = [QtCore.Qt.DecorationRole | QtCore.Qt.DisplayRole]
+
+    def setUpdatePeriod(self, second):
+        self._updatePeriod = second
+
+    def updatePeriod(self):
+        return self._updatePeriod
 
     def __daemon__(self):
         for t in [self.update_thumbnail]:
@@ -74,7 +80,7 @@ class ListModel(QtCore.QAbstractListModel):
                     worker = Worker(self.force_update_item, row)
                     self.threadpool.start(worker)
 
-            time.sleep(self.delay)
+            time.sleep(self.updatePeriod())
 
     def index(self, row, column=0, parent=QtCore.QModelIndex()):
         if parent.isValid() and parent.column() != 0:
