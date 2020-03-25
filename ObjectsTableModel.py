@@ -134,13 +134,9 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
     def _dataChanged(self):
         firstRun = True
         while not close_all:
-            # if close_all is True:
-                # break
             for i, c in enumerate(self._data):
                 if not firstRun:
-                    c.is_robot()
-                    c.get_curl()
-                    c.changed.extend(['robot', 'curl'])
+                    c.update_server_info()
 
                 for info in c.changed:
                     if info not in self._header:

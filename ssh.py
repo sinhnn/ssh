@@ -188,9 +188,7 @@ class SSHClient(object):
             'error': FakeStdOut(
                 name='error',
                 file_=self.cached_path('error'),
-                parent=self),
-            'robot': '',
-            'curl': ''
+                parent=self)
         }
 
         self.encrypted = {
@@ -252,28 +250,26 @@ class SSHClient(object):
         self.changed.append(name)
         return self.status[name]
 
-    def is_robot(self):
-        r = self.watch_file('robot', 'cat ~/.ytv/robot.txt')
-        return str(r)
-
-    def get_curl(self):
-        r = self.watch_file('curl', 'cat ~/.ytv/status.txt')
-        return str(r)
-
     def update_server_info(self):
-        paths = ' '.join([v.remote_path for k, v in self.encrypted.items()])
-        remote_path = '"{}"'.format(paths)
-        self.download_by_subprocess(
-            src_path=remote_path,
-            store=True,
-            dst_path=self.cached_path()
+        # paths = ' '.join([v.remote_path for k, v in self.encrypted.items()])
+        # remote_path = '"{}"'.format(paths)
+        # self.download_by_subprocess(
+        #     src_path=remote_path,
+        #     store=True,
+        #     dst_path=self.cached_path()
+        # )
+        # for k, v in self.encrypted.items():
+        #     v.decrypt()
+        #     self.changed.append(k)
+        command = 'bash ~/.ytv/get_info.sh'
+        (rcmd, rout, rerr) = self.exec_command(
+                command=command,
+                pclient=self._client
         )
-        for k, v in self.encrypted.items():
-            v.decrypt()
-            self.changed.append(k)
-
-        self.is_robot()
-        self.get_curl()
+        if rcmd == command:
+            d = json.loads(''.join(rout))
+            self.status.update(d)
+            self.changed.extend(d.keys())
         return True
 
     def cached_path(self, name=None):
