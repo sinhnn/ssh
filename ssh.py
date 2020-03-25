@@ -267,9 +267,14 @@ class SSHClient(object):
                 pclient=self._client
         )
         if rcmd == command:
-            d = json.loads(''.join(rout))
-            self.status.update(d)
-            self.changed.extend(d.keys())
+            tr = (''.join(rout)).strip()
+            try:
+                d = json.loads(tr)
+                self.status.update(d)
+                self.changed.extend(d.keys())
+            except Exception:
+                self.status['raw'] = ''.join(rout + rerr)
+                self.changed.append('raw')
         return True
 
     def cached_path(self, name=None):
