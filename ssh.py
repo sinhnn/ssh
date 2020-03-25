@@ -261,7 +261,7 @@ class SSHClient(object):
         # for k, v in self.encrypted.items():
         #     v.decrypt()
         #     self.changed.append(k)
-        command = 'bash ~/.ytv/get_info.sh'
+        command = 'bash ~/.ytv/script/update_info.sh'
         (rcmd, rout, rerr) = self.exec_command(
                 command=command,
                 pclient=self._client
