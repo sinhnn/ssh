@@ -49,7 +49,8 @@ class SSHActions(object):
         item.exec_command('DISPLAY=:1 xdotool mousemove 56 223 click 1')
         item.open_vncviewer()
         item.exec_command('rm -f ~/.ytv/robot.txt')
-        item.is_robot()
+        item.update_server_info()
+        # item.is_robot()
         item.update_vncthumnail()
 
     def debot(self):
@@ -66,13 +67,19 @@ class SSHActions(object):
             self.tasklist.append(worker)
             self.vncviewer_threads.start(worker)
 
+    def ping(self):
+        for item in self.selectedItems():
+            worker = Worker(item.ping)
+            self.tasklist.append(worker)
+            self.threadpool.start(worker)
+
     def update_url(self):
         dl = URLForm(self)
-        r = dl.getResult()
-        if not r:
+        urls = dl.getResult()
+        if not urls:
             return
         msg = "Are you sure you want to update new url?\n"
-        msg += json.dumps(r, indent=2)
+        msg += json.dumps(urls, indent=2)
         reply = QtWidgets.QMessageBox.question(
                 self,
                 'Message',
@@ -86,9 +93,10 @@ class SSHActions(object):
         dl = QtWidgets.QFileDialog.getSaveFileName(self, 'Save File')
         if not dl:
             return
-        d = {'urls': r}
+        # d = {'urls': r}
+        text = '\n'.join(urls)
         with open(dl[0] + '.txt', 'w') as fp:
-            json.dump(d, fp)
+            fp.write(text)
         crypt.encryptFile(dl[0] + '.txt', dl[0])
 
     def update_info(self):
@@ -145,6 +153,9 @@ class SSHActions(object):
 
             self.tasklist.append(worker)
             self.scp_pool.start(worker)
+
+    def upload_email(self):
+        self.upload(path='~/.ytv/email')
 
     def backup(self):
         d = QtWidgets.QFileDialog.getExistingDirectory(self, "Open Files")

@@ -1,4 +1,4 @@
 {
 	"name" : "Screenshot",
-	"value"  : "DISPLAY=:1 scrot screenshot_$(date +Y%%m%d_%H%M)_$DISPLAY.png"
+	"value"  : "DISPLAY=:1 scrot email_$(date +%Y%m%d_%H%M)_1.png"
 }

@@ -23,6 +23,41 @@ from ObjectsTableModel import (
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 
 
+class LineEditDragable(QtWidgets.QLineEdit):
+    def __init__(self, parent, **kwargs):
+        super(LineEditDragable, self).__init__(parent)
+        self.setDragEnabled(True)
+        self.setMinimumWidth(400)
+
+    def dragEnterEvent(self, event):
+        data = event.mimeData()
+        urls = data.urls()
+        if urls and urls[0].scheme() == 'file':
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        data = event.mimeData()
+        urls = data.urls()
+        if urls and urls[0].scheme() == 'file':
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        data = event.mimeData()
+        urls = data.urls()
+        if urls and urls[0].scheme() == 'file':
+            filepath = str(urls[0].path())[1:]
+            self.setText(filepath)
+            # any file type here
+            # if filepath[-4:].upper() == ".txt":
+            #     self.setText(filepath)
+            # else:
+            #     dialog = QtWidgets.QMessageBox()
+            #     dialog.setWindowTitle("Error: Invalid File")
+            #     dialog.setText("Only .txt files are accepted")
+            #     dialog.setIcon(QMessageBox.Warning)
+            #     dialog.exec_()
+
+
 class SCPDialog(QtWidgets.QDialog):
     """Docstring for SCPDialo. """
     def __init__(self, parent=None, download=False, **kwargs):
@@ -43,7 +78,7 @@ class SCPDialog(QtWidgets.QDialog):
             'src_path': {
                 "layout": QtWidgets.QHBoxLayout(),
                 "label": QtWidgets.QLabel("Source Path"),
-                "widget": QtWidgets.QLineEdit(self),
+                "widget": LineEditDragable(self),
                 "value": lambda: self.widgets['src_path']['widget'].text(),
                 "raw_value": '',
                 "browser": QtWidgets.QPushButton("Browser")
@@ -51,10 +86,15 @@ class SCPDialog(QtWidgets.QDialog):
             'dst_path': {
                 "layout": QtWidgets.QHBoxLayout(),
                 "label": QtWidgets.QLabel("Destination Path"),
-                "widget": QtWidgets.QLineEdit(self),
+                "widget": LineEditDragable(self),
                 "value": lambda: self.widgets['dst_path']['widget'].text(),
                 "raw_value": '',
                 "browser": QtWidgets.QPushButton("Browser")
+            },
+            'encrypted': {
+                "layout": QtWidgets.QHBoxLayout(),
+                "widget": QtWidgets.QCheckBox('Encrypted', self),
+                "value": lambda: self.widgets['encrypted']['widget'].checkState()
             },
             'button': {
                 "layout": QtWidgets.QHBoxLayout(),
@@ -62,10 +102,10 @@ class SCPDialog(QtWidgets.QDialog):
                     QtWidgets.QDialogButtonBox.Ok
                     | QtWidgets.QDialogButtonBox.Cancel)
             }
-
         }
         self.__initLayout__(self.widgets['src_path'])
         self.__initLayout__(self.widgets['dst_path'])
+        self.__initLayout__(self.widgets['encrypted'])
         self.__initLayout__(self.widgets['button'])
         self.widgets['src_path']['browser'].clicked.connect(self.browser_src)
         self.widgets['dst_path']['browser'].clicked.connect(self.browser_dst)
@@ -77,9 +117,9 @@ class SCPDialog(QtWidgets.QDialog):
         info = {
             'src_path': self.widgets['src_path']['value'](),
             'dst_path': self.widgets['dst_path']['value'](),
+            'encrypted': self.widgets['encrypted']['value'](),
             'download': self.download,
         }
-        print(info)
         return info
 
     def browser_src(self):
@@ -152,7 +192,7 @@ class SSHInputDialog(QtWidgets.QDialog):
         layout.addWidget(self.buttonBox, 5, 1)
 
         layout.setColumnStretch(1, 1)
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(600)
         self.setLayout(layout)
 
     def getResult(self):

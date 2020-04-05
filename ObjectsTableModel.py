@@ -100,6 +100,8 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         super(ObjectsTableModel, self).__init__(**kwargs)
         self._header = [
                 'hostname',
+                'disabled',
+                'ping',
                 'lastupdate',
                 'curl',
                 'is_bot',
@@ -115,6 +117,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                 'error']
 
         self._data = data
+        self._enableUpdate = False
         self.__check_update__()
 
     def __update_header__(self):
@@ -136,21 +139,22 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
     def _dataChanged(self):
         firstRun = True
         while not close_all:
-            for i, c in enumerate(self._data):
-                if not firstRun:
-                    c.update_server_info()
+            if self._enableUpdate is True:
+                for i, c in enumerate(self._data):
+                    if not firstRun:
+                        c.update_server_info()
 
-                for info in c.changed:
-                    if info not in self._header:
-                        continue
-                    index3 = self.createIndex(i, self._header.index(info))
-                    self.dataChanged.emit(index3, index3, [])
-                    try:
-                        self.fupate.emit(index3)
-                    except AttributeError:
-                        pass
-                    if info in c.changed:
-                        c.changed.remove(info)
+                    for info in c.changed:
+                        if info not in self._header:
+                            continue
+                        index3 = self.createIndex(i, self._header.index(info))
+                        # self.dataChanged.emit(index3, index3, [])
+                        try:
+                            self.fupate.emit(index3)
+                        except AttributeError:
+                            pass
+                        if info in c.changed:
+                            c.changed.remove(info)
             time.sleep(1)
             firstRun = False
 
@@ -166,7 +170,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
     def objectData(self, index):
         return self._data[index.row()]
 
-    def headerData(self, section, orientation, role):
+    def headerData(self, section, orientation=Qt.Horizontal, role=Qt.DisplayRole):
         if role != Qt.DisplayRole:
             return QVariant()
         else:

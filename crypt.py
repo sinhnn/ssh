@@ -68,6 +68,7 @@ def decryptFile2Variable(file, password):
 
 if __name__ == "__main__":
     import argparse
+    import json
     parser = argparse.ArgumentParser(description='crypt')
     parser.add_argument('file', help='')
     parser.add_argument('-force', help='Force overwrite', action="store_true")
@@ -85,3 +86,4 @@ if __name__ == "__main__":
             pyAesCrypt.encryptFile(args.file, ofile, password, bufferSize)
     else:
         print(decryptFile(args.file, password))
+        print(json.loads(decryptFile(args.file, password)))

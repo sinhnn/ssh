@@ -4,3 +4,4 @@ scp
 requests[socks]
 tailer
 pyQt5
+pyping

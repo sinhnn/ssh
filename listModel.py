@@ -15,6 +15,11 @@ from worker import Worker
 from sshContextMenu import SSHActions, XDOTOOL
 
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    __PATH__ = os.path.abspath(os.path.dirname(sys.executable))
+elif __file__:
+    __PATH__ = os.path.abspath(os.path.dirname(__file__))
+
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
 
 
@@ -63,7 +68,7 @@ class ListModel(QtCore.QAbstractListModel):
                 self.__updating_item__.append(item)
                 r = item.update_vncthumnail()
                 if r:
-                    self.dataChanged.emit(topLeft, topLeft, self.__role__)
+                    # self.dataChanged.emit(topLeft, topLeft, self.__role__)
                     self.fupate.emit(topLeft)
                 self.__updating_item__.remove(item)
         except Exception as e:
@@ -175,14 +180,6 @@ class ThumbnailListViewer(SSHActions, QtWidgets.QListView):
         self.setDragEnabled(False)
         self.initUI()
 
-        # self.threadpool = QtCore.QThreadPool()
-        # self.threadpool.setMaxThreadCount(100)
-        # self.scp_pool = QtCore.QThreadPool()
-        # self.scp_pool.setMaxThreadCount(5)
-        # self.backup_pool = QtCore.QThreadPool()
-        # self.backup_pool.setMaxThreadCount(10)
-        # self.vncviewer_threads = QtCore.QThreadPool()
-        # self.terminal_threads = QtCore.QThreadPool()
         self.setStyleSheet("font-size: 12px;")
 
     def initUI(self):
@@ -190,6 +187,7 @@ class ThumbnailListViewer(SSHActions, QtWidgets.QListView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
+            'open_folder': self.open_folder,
             'debot': self.debot,
             'Send F5': lambda: self.exec_command(XDOTOOL + ' key F5'),
             'Send Space': lambda: self.exec_command(XDOTOOL + ' key space'),

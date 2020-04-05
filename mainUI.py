@@ -21,6 +21,10 @@ from sshTable import (
 
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
+if getattr(sys, 'frozen', False):
+    __PATH__ = os.path.abspath(os.path.dirname(sys.executable))
+elif __file__:
+    __PATH__ = os.path.abspath(os.path.dirname(__file__))
 
 
 def changeBackgroundColor(widget, colorString):
@@ -43,8 +47,12 @@ def timedeltaToString(deltaTime):
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
 
-    def __init__(self, dir=__SSH_DIR__):
+    def __init__(self, dir=[__SSH_DIR__]):
         self.dir = dir
+        self._data = []
+        for d in self.dir:
+            self._data.extend(load_ssh_dir(d))
+
         self.__initalMode = 0
         super(MainFrame, self).__init__()
         self.setWindowIcon(getAppIcon())
@@ -52,13 +60,16 @@ class MainFrame(QtWidgets.QMainWindow):
         self.centerWindow()
         self.setMinimumSize(1800, 1000)
 
+
+
+
     def initUI(self):
         mWidgets = QtWidgets.QWidget()
         mlayout = QtWidgets.QVBoxLayout()
 
         widgets = ThumbnailListViewer(parent=self)
         self.models = []
-        model = ListModel(load_ssh_dir(self.dir), parent=self)
+        model = ListModel(data=self._data, parent=self)
         self.models.append(model)
         widgets.setModel(model)
         mlayout.addWidget(widgets)
@@ -286,7 +297,9 @@ if __name__ == '__main__':
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())
     if len(argv) == 2:
-        w = MainFrame(dir=argv[1])
+        w = MainFrame(dir=[argv[1]])
+    elif len(argv) > 2:
+        w = MainFrame(dir=argv[1:])
     else:
         w = MainFrame()
 

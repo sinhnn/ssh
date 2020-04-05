@@ -10,6 +10,9 @@ import threading
 # import subprocess
 import json
 import logging
+from collections import OrderedDict
+from functools import partial
+
 
 from PyQt5.QtWidgets import (
         QApplication,
@@ -38,88 +41,6 @@ from sshContextMenu import SSHActions
 from worker import Worker
 # =============================================================================
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
-
-
-# class ChooseCommandDialog(QtWidgets.QDialog):
-#     __PRESET_CMD_DIR__ = os.path.join(__PATH__, 'preset')
-# 
-#     def __init__(self, parent, **kwargs):
-#         QtWidgets.QDialog.__init__(self, **kwargs)
-#         self.setWindowTitle("Choose command")
-#         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
-#         self.initUI()
-# 
-#     def initUI(self):
-#         layout = QtWidgets.QGridLayout()
-#         self.buttonBox = QtWidgets.QDialogButtonBox(
-#             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-#         self.buttonBox.accepted.connect(self.accept)
-#         self.buttonBox.rejected.connect(self.reject)
-# 
-#         self.command = QtWidgets.QLineEdit(self)
-# 
-#         self.presetBox = QtWidgets.QComboBox(self)
-#         presetBoxModel = ComboBoxModel(self.__load_preset__())
-#         self.presetBox.setModel(presetBoxModel)
-#         self.presetBox.currentIndexChanged.connect(self.__show_preset_value__)
-# 
-#         self.browser = QtWidgets.QPushButton("Browser", self)
-#         self.browser.clicked.connect(self.__browser__)
-# 
-#         layout.addWidget(self.command, 0, 0, 2, 2)
-#         layout.addWidget(self.presetBox, 2, 0)
-#         layout.addWidget(self.browser, 2, 1)
-#         layout.addWidget(self.buttonBox, 3, 0)
-#         layout.setColumnStretch(0, 1)
-#         layout.setRowStretch(0, 1)
-# 
-#         self.setMinimumWidth(600)
-#         self.setLayout(layout)
-# 
-#     def getResult(self):
-#         r = self.exec_()
-#         if r:
-#             return self.command.text()
-#         else:
-#             return False
-# 
-#     def __browser__(self):
-#         dialog = QtWidgets.QFileDialog(self)
-#         dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
-#         files, _ = dialog.getOpenFileNames(self, 'Shell script file')
-#         if not files:
-#             return
-#         self.command.setText(files[0])
-# 
-#     def __show_preset_value__(self, index):
-#         item = self.presetBox.model().itemAtRow(index)
-#         self.command.setText(item['value'])
-# 
-#     def __load_preset__(self):
-#         results = []
-#         for entry in os.scandir(ChooseCommandDialog.__PRESET_CMD_DIR__):
-#             if entry.is_dir():
-#                 continue
-#             if not re.search(r'.preset.json$', entry.name):
-#                 continue
-# 
-#             command = self.__load_preset_file__(entry.path)
-#             if command:
-#                 results.append(command)
-#         return results
-# 
-#     def __load_preset_file__(self, path):
-#         fp = open(path, 'r')
-#         command = json.load(fp)
-#         fp.close()
-# 
-#         for k in ['name', 'value']:
-#             if k not in command.keys():
-#                 logging.error('unable to parse preset file {}'.format(path))
-#                 return {}
-#         return command
-
-
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
 
 
@@ -130,30 +51,10 @@ class SSHTable(SSHActions, QTableView):
         QTableView.__init__(self, parent=parent, **kwargs)
 
         self.configTable()
+        self.setAlternatingRowColors(True)
         self.setStyleSheet('font-family: Consolas; font-size: 8;')
+
         self.setFont(QtGui.QFont("Consolas", 8))
-
-        # self.tasklist = tasklist
-        # self.threadpool = QtCore.QThreadPool()
-        # self.threadpool.setMaxThreadCount(50)
-        # self.threadpool.waitForDone(-1)
-
-        # self.scp_pool = QtCore.QThreadPool()
-        # self.scp_pool.setMaxThreadCount(5)
-
-        # self.backup_pool = QtCore.QThreadPool()
-        # self.backup_pool.setMaxThreadCount(5)
-
-        # self.vncviewer_threads = QtCore.QThreadPool()
-        # self.vncviewer_threads.setMaxThreadCount(10)
-
-        # self.terminal_threads = QtCore.QThreadPool()
-        # self.terminal_threads.setMaxThreadCount(100)
-        # self.geometriesChanged.connect(self.updateGeometry)
-
-    # def clearJobs(self):
-    #     for f in [self.threadpool, self.scp_pool, self.backup_pool]:
-    #         f.clear()
 
     def configTable(self):
         self.horizontalHeader().setStretchLastSection(True)
@@ -178,10 +79,14 @@ class SSHTable(SSHActions, QTableView):
         self.actions = {
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
+            'open_terminal_with_cmd': self.open_terminal_with_cmd,
+            'ping': self.ping,
             'new': self.new_item,
             'open_folder': self.open_folder,
-            'update_url': self.update_url,
+            # 'update_url': self.update_url,
             'update_server_info': self.update_info,
+            'upload_email': self.upload_email,
+            'reload_config': self.reload_config,
             'command': self.exec_command,
             'debot': self.debot,
             'edit': self.open_file,
@@ -211,14 +116,25 @@ class SSHTable(SSHActions, QTableView):
         allrows = list(set([i.row() for i in self.selectedIndexes()]))
         return [model.itemAtRow(i) for i in allrows]
 
+    def force_update(self, index):
+        rect = self.visualRect(index)
+        self.viewport().update(rect)
+
+    def setColumnVisible(self, i, hide):
+        self.setColumnHidden(i, not hide)
+
 
 class SSHWidget(QtWidgets.QWidget):
-    def __init__(self, data=[], dir=__SSH_DIR__, parent=None, **kwargs):
+    def __init__(self, data=[], parent=None, intype="list", **kwargs):
         QtWidgets.QWidget.__init__(self, parent, **kwargs)
-        self.data = data
-        if not self.data:
-            self.data = load_ssh_dir(dir)
-            self.dir = dir
+
+        if intype == "list":
+            self.data = data
+        else:
+            self.dir = data
+            self.data = []
+            for d in data:
+                self.data.extend(load_ssh_dir(d))
 
         self.refresh_pool = QtCore.QThreadPool()
         self.refresh_pool.setMaxThreadCount(5)
@@ -227,6 +143,8 @@ class SSHWidget(QtWidgets.QWidget):
 
     def initUI(self):
         layout = QtWidgets.QVBoxLayout()
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         self.tasklist = QObjectListModel(self)
         self.tasklistview = QtWidgets.QListView(self)
@@ -238,6 +156,7 @@ class SSHWidget(QtWidgets.QWidget):
         self.tableview.model().fupate.connect(self.tableview.force_update)
 
         optW = self.initOpts()
+        viewOpts = self.initViewOpts()
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         splitter.addWidget(self.tableview)
@@ -246,12 +165,13 @@ class SSHWidget(QtWidgets.QWidget):
         splitter.setStretchFactor(1, 0)
 
         layout.addWidget(optW)
+        layout.addWidget(viewOpts)
         layout.addWidget(splitter)
         self.setLayout(layout)
 
     def initOpts(self):
         widget = QtWidgets.QWidget(self)
-        widget.setFixedHeight(50)
+        widget.setFixedHeight(40)
         layout = QtWidgets.QHBoxLayout()
 
         search = QtWidgets.QLineEdit(self)
@@ -284,19 +204,41 @@ class SSHWidget(QtWidgets.QWidget):
 
         return widget
 
+    def initViewOpts(self):
+        widget = QtWidgets.QWidget(self)
+        widget.setFixedHeight(35)
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setSpacing(0)
+        # layout.setContentsMargins(0,0,0,0)
+        model = self.tableview.model()
+        headers = [model.headerData(i) for i in range(0, model.columnCount())]
+        viewables = OrderedDict()
+
+        for i, h in enumerate(headers):
+            viewables[h] = QtWidgets.QCheckBox(h, self)
+            viewables[h].setChecked(True)
+            f = partial(self.tableview.setColumnVisible, i)
+            viewables[h].stateChanged.connect(f)
+            layout.addWidget(viewables[h])
+        spacer = QtWidgets.QSpacerItem(
+                0, 0,
+                QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Expanding
+        )
+        layout.addItem(spacer)
+        widget.setLayout(layout)
+        return widget
+
     def send_to_all(self):
         cmd = self.command.text()
         self.tableview.exec_command(cmd=cmd, select_all=True)
 
     def refreshTaskList(self):
         while (True):
-            # self.tasklistview.update()
-            # time.sleep(1)
             for t in self.tasklist.getdata():
                 try:
                     if t.done is True:
                         self.tasklist.remove(t)
-                        # break
                 except Exception:
                     pass
                 self.info.setText('ThreadPool={}/scp={}/backup={}'.format(
@@ -326,15 +268,12 @@ class SSHWidget(QtWidgets.QWidget):
             time.sleep(5)
 
     def daemon(self):
-        # threads = []
-        # for t in [self.refreshTaskList, self.refreshLog]:
         for t in [self.refreshTaskList]:
             t = threading.Thread(target=t)
             t.daemon = True
             t.start()
 
     def resizeEvent(self, event):
-        # QtWidgets.QWidget.updateGeometry()
         self.tableview.updateGeometry()
 
     def on_search(self, pattern):
@@ -355,7 +294,9 @@ def main():
     app = QApplication(argv)
     if len(argv) == 2:
         print("Loading ssh clients in directory {}".format(argv[1]))
-        w = SSHWidget(dir=argv[1])
+        w = SSHWidget(data=[argv[1]], intype="directory")
+    elif len(argv) > 2:
+        w = SSHWidget(data=argv[1:], intype="directory")
     else:
         w = SSHWidget()
 
