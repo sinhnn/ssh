@@ -12,6 +12,7 @@ import paramiko
 from scp import SCPClient, SCPException
 import collections
 import ping3
+import traceback
 
 # My packages
 # import common
@@ -20,6 +21,7 @@ from remoteFile import EncryptedRemoteFile
 import utils
 
 from tunnel import SSHTunnelForwarder
+from ssh_options import KEEP_ALIVE
 from platform_ssh import (
     CMD,
     SCP,
@@ -29,6 +31,8 @@ from platform_ssh import (
     # VNCSNAPSHOT,
     OPEN_IN_TERMINAL,
     OPEN_SSH_IN_TERMINAL,
+    FIREFOX,
+    CHROME,
 )
 
 SSH_MAX_FAILED = 100
@@ -57,6 +61,7 @@ REQUIREMENTS = [
     "caja", "mate-terminal", "caja-open-terminal",
     "ffmpeg", "scrot", "xsel", "xdotool"
 ]
+
 CMD_INSTALL_REQUIREMENT = 'sudo apt update && pgrep -f "apt\s+install"'  \
                + ' || sudo apt install -y {}'.format(' '.join(REQUIREMENTS))
 
@@ -161,20 +166,20 @@ class SSHClient(object):
             self.config['key_filename'] = os.path.join(
                     os.path.dirname(self.fileConfig),
                     'id_rsa'
-                    )
+            )
 
-        self.storeDir = os.path.join(
+        self.root = os.path.join(
                 os.path.dirname(fileConfig),
                 self.config.get('hostname')
-                )
+        )
 
         self.dirs = {
-            'backup': os.path.join(self.storeDir, 'backup'),
-            'cache': os.path.join(self.storeDir, 'cache')
+            'backup': os.path.join(self.root, 'backup'),
+            'cache': os.path.join(self.root, 'cache')
         }
         self.files = {
-            'disabled': os.path.join(self.storeDir, 'disabled'),
-            'failed': os.path.join(self.storeDir, 'failed')
+            'disabled': os.path.join(self.root, 'disabled'),
+            'failed': os.path.join(self.root, 'failed')
         }
         self.create_data_dir()
 
@@ -207,7 +212,9 @@ class SSHClient(object):
             'error': FakeStdOut(
                 name='error',
                 file_=self.cached_path('error'),
-                parent=self)
+                parent=self),
+            'socks5': [],
+
         }
 
         self.encrypted = {
@@ -243,6 +250,9 @@ class SSHClient(object):
 
         self.threads = []
         self.__failedConnect__ = 0
+
+    def path(self, *args):
+        return os.path.join(self.root, *args)
 
     def create_data_dir(self):
         try:
@@ -337,7 +347,7 @@ class SSHClient(object):
     def initLogger(self):
         try:
             self.logger = logging.getLogger('SSHClient_{}'.format(self.id))
-            logFile = os.path.join(self.storeDir, 'log.txt')
+            logFile = os.path.join(self.root, 'log.txt')
             if not os.path.isfile(logFile):
                 open(logFile, 'w').write('')
 
@@ -351,7 +361,7 @@ class SSHClient(object):
             self.loghandler = fileHandler
             self.logger.addHandler(fileHandler)
             self.logger.setLevel(logging.DEBUG)
-            self.logger.propagate = True
+            # self.logger.propagate = True
             self.logFile = logFile
         except Exception as e:
             self.logger = logging
@@ -502,7 +512,7 @@ class SSHClient(object):
         if is_valid_path(path):
             return os.path.abspath(path)
 
-        path = os.path.join(self.storeDir, path)
+        path = os.path.join(self.root, path)
         if is_valid_path(path):
             return os.path.abspath(path)
 
@@ -732,7 +742,8 @@ class SSHClient(object):
         # ERROR: Multiple ssh at same time will take the same port
         print('scaning local port ...')
         port = self.portscanner.getAvailablePort(
-                range(SSH_TUNNEL_START+self.id*5, SSH_TUNNEL_END))
+                range(SSH_TUNNEL_START+self.id*5, SSH_TUNNEL_END)
+        )
         print('creating tunnel via port {} and {}'.format(port, kwargs))
         self.log('creating tunnel via port {} and {}'.format(port, kwargs))
         try:
@@ -753,8 +764,26 @@ class SSHClient(object):
                 self.tunnels.append(tunnel)
             return tunnel
         except Exception as e:
+            traceback.print_exc()
             self.log(e, level=logging.ERROR, exc_info=True)
             return False
+
+    def create_socks5(self, port=None, **kwargs):
+        port = self.portscanner.getAvailablePort(
+                range(SSH_TUNNEL_START+self.id*5+2, SSH_TUNNEL_END)
+        )
+        print('creating tunnel via port {} and {}'.format(port, kwargs))
+        args = [CMD]
+        args.extend(self.__base_opt__())
+        args.extend(KEEP_ALIVE)
+        args.extend(['-C2vTnN'])
+        args.extend(['-D', str(port)])
+        proc = psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        self.tunnel_proc.append(proc)
+        time.sleep(1)
+        self.changed.append('socks5')
+        self.status['socks5'].append(port)
+        return (proc, port)
 
     def __ssh_config_file__(self):
         d = os.path.dirname(self.fileConfig)
@@ -770,7 +799,6 @@ class SSHClient(object):
 
     def __base_opt__(self):
         args = []
-
         p = self.__ssh_config_file__()
         if p:
             args.extend(['-F', p])
@@ -788,7 +816,7 @@ class SSHClient(object):
     def ssh_tunnel_cmd(self):
         args = [CMD]
         args.extend(self.__base_opt__())
-        args.extend(['-C2qTnN', '-D', str(22000)])
+        args.extend(['-C2TnN', '-D', str(22000)])
         return ' '.join(args)
 
     def __base_opt_scp__(self):
@@ -1155,6 +1183,38 @@ class SSHClient(object):
             if display and pid:
                 result.append((display, pid))
         return result
+
+    def firefox_via_sshtunnel(self):
+        profile_dir = self.path('ffprofile')
+        os.makedirs(profile_dir, exist_ok=True)
+        (proc, port) = self.create_socks5()
+        configs = [
+            'user_pref("media.peerconnection.ice.proxy_only_if_behind_proxy", true);',
+            'user_pref("media.peerconnection.enabled", false);',
+            'user_pref("network.proxy.socks", "127.0.0.1");',
+            'user_pref("network.proxy.socks_port", {});'.format(port),
+            'user_pref("network.proxy.type", 1);'
+        ]
+        fp = open(self.path('ffprofile', 'user.js'), 'w')
+        fp.write('\n'.join(configs))
+        fp.close()
+        ffproc = subprocess.call([FIREFOX, '-new-instance', '-profile', profile_dir, 'https://iplocation.com/'])
+        # ffproc = subprocess.Popen([FIREFOX, '-new-instance', '-profile', profile_dir, 'https://iplocation.com/'])
+        # while True:
+        #     print(ffproc)
+        #     print(ffproc.poll())
+        #     # print(ffproc.status())
+        #     time.sleep(2)
+        # print('killing tunnel process {} at port {}'.format(proc, port))
+        # proc.kill()
+
+    def chrome_via_sshtunnel(self):
+        os.makedirs(self.path('chrome'), exist_ok=True)
+        # os.makedirs(item.path('chrome'))
+        tunnel = self.create_tunnel()
+        # subprocess.
+        tunnel.stop()
+        # create tunnel
 
 
 def load_ssh_dir(dir):

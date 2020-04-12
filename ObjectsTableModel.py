@@ -108,13 +108,15 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                 'signal',
                 'pid',
                 'allproc',
+                'socks5',
                 'data',
                 'next_data',
                 'email',
                 'ytvlog',
                 'lastcmd',
                 'msg',
-                'error']
+                'error',
+        ]
 
         self._data = data
         self._enableUpdate = False

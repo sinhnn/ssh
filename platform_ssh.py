@@ -12,6 +12,8 @@ if platform.system() == "Windows":
     VNCVIEWER = r'C:\Program Files\RealVNC\VNC Viewer\vncviewer'
     OPEN_IN_TERMINAL = ["cmd.exe", "/k"]
     OPEN_SSH_IN_TERMINAL = OPEN_IN_TERMINAL + ["ssh.exe"]
+    CHROME = r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+    FIREFOX = r'C:\Program Files\Mozilla Firefox\firefox.exe'
 elif platform.system() == "Linux":
     CMD = "ssh"
     SCP = 'scp'
@@ -20,6 +22,8 @@ elif platform.system() == "Linux":
     OPEN_IN_TERMINAL = []
     VNCVIEWER = 'vncviewer'
     VNCSNAPSHOT = 'vncsnapshot'
+    CHROME = r'google-chrome-stable'
+    FIREFOX = r'firefox'
 else:
     print("unsupported platform " + platform.system())
     sys.exit(1)

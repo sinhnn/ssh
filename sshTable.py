@@ -80,6 +80,7 @@ class SSHTable(SSHActions, QTableView):
             'open': self.open_vncviewer,
             'open_terminal': self.open_terminal,
             'open_terminal_with_cmd': self.open_terminal_with_cmd,
+            'firefox_via_sshtunnel': self.firefox_via_sshtunnel,
             'ping': self.ping,
             'new': self.new_item,
             'open_folder': self.open_folder,

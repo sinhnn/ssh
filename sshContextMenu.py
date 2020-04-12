@@ -58,8 +58,16 @@ class SSHActions(object):
             worker = Worker(self.__debot__, item)
             self.vncviewer_threads.start(worker)
 
+    def firefox_via_sshtunnel(self):
+        for item in self.selectedItems():
+            worker = Worker(item.firefox_via_sshtunnel)
+            self.vncviewer_threads.start(worker)
+
     def selectedItems(self, select_all=False):
         return []
+
+    def create_tunnel(self, port=None):
+        pass
 
     def open_vncviewer(self):
         for item in self.selectedItems():
@@ -297,3 +305,4 @@ class SSHActions(object):
             item = load_ssh_file(f)
             item.info['filepath'] = str(r)
             self.model().appendItem(item)
+

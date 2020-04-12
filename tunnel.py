@@ -73,7 +73,33 @@ class SSHTunnelForwarder(sshtunnel.SSHTunnelForwarder):
         if not self.config.get('ssh_pkey'):
             proc = psutil.Popen(
                     args,
-                    creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+        else:
+            proc = psutil.Popen(args)
+        self.tunnel_proc.append(proc)
+        time.sleep(1)
+        return proc
+
+    def start_socks5(self):
+        args = [CMD]
+        args.extend(KEEP_ALIVE)
+        args.extend(['-C2qTnN'])
+
+        if self.config.get('ssh_pkey'):
+            args.extend(['-i', self.config.get('ssh_pkey')])
+
+        args.extend(['-D', str(self.get('local_bind_port'))])
+
+        args.append('{}@{}'.format(
+            self.config['ssh_username'],
+            self.config['ssh_address_or_host'][0]))
+        logging.info("starting new tunnel: {}".format(' '.join(args)))
+        if not self.config.get('ssh_pkey'):
+            proc = psutil.Popen(
+                    args,
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
         else:
             proc = psutil.Popen(args)
         self.tunnel_proc.append(proc)
