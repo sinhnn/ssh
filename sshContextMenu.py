@@ -134,7 +134,7 @@ class SSHActions(object):
 
     def open_folder(self):
         for item in self.selectedItems():
-            worker = Worker(os.startfile, item.storeDir)
+            worker = Worker(os.startfile, item.path())
             self.tasklist.append(worker)
             self.threadpool.start(worker)
 
