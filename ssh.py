@@ -198,6 +198,7 @@ class SSHClient(object):
         self._thumbnail_session = None
         self.lastupdate = "None"
         self.changed = []
+
         self.status = {
             'path': self.root,
             'account': self._watch_files['account'].value,
@@ -435,14 +436,6 @@ class SSHClient(object):
             r = self.allproc()
         elif k == 'lastupdate':
             r = self.lastupdate
-        # elif k == 'ping':
-            # r = self.ping()
-        # elif k == 'curl':
-            # r = self.get_curl()
-        # elif k == 'robot':
-            # r = self.is_robot()
-        # elif k == 'disabled':
-            # r = bool(os.path.isfile(self.files['disabled']))
         elif k in self.status.keys():
             r = self.status[k]
         elif k in self.encrypted.keys():
@@ -473,7 +466,8 @@ class SSHClient(object):
             if not len(intersection(ones, k)):
                 self.log(
                         'required one parameter in {}'.format(ones),
-                        level=logging.ERROR)
+                        level=logging.ERROR
+                )
                 return False
         return True
 
@@ -1204,7 +1198,12 @@ class SSHClient(object):
         fp = open(self.path('ffprofile', 'user.js'), 'w')
         fp.write('\n'.join(configs))
         fp.close()
-        ffproc = subprocess.call([FIREFOX, '-new-instance', '-profile', profile_dir, 'https://iplocation.com/'])
+        ffproc = subprocess.call([
+            FIREFOX,
+            '-new-instance',
+            '-profile',
+            profile_dir, 'https://iplocation.com/'
+        ])
         # ffproc = subprocess.Popen([FIREFOX, '-new-instance', '-profile', profile_dir, 'https://iplocation.com/'])
         # while True:
         #     print(ffproc)
@@ -1216,10 +1215,13 @@ class SSHClient(object):
 
     def chrome_via_sshtunnel(self):
         os.makedirs(self.path('chrome'), exist_ok=True)
-        # os.makedirs(item.path('chrome'))
-        tunnel = self.create_tunnel()
-        # subprocess.
-        tunnel.stop()
+        (proc, port) = self.create_socks5()
+        proxy_server = '--proxy-server=socks5://127.0.0.1:' + str(port)
+        args = [CHROME]
+        args.append(proxy_server)
+        args.append('--user-data-dir={}'.format(self.path('chrome')))
+        args.append('https://iplocation.com')
+        chproc = subprocess.call(args)
         # create tunnel
 
 
