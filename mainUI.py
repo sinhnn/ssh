@@ -11,7 +11,8 @@ import logging
 import common
 from listModel import (
         ThumbnailListViewer,
-        ListModel
+        ListModel,
+        ThumbnailWidget,
 )
 from sshTable import (
         # SSHTable,
@@ -41,140 +42,69 @@ def timedeltaToString(deltaTime):
     s = deltaTime.seconds
     hours, remainder = divmod(s, 3600)
     minutes, seconds = divmod(remainder, 60)
-    return '%s:%s:%s' % (hours, minutes, seconds)
-
+    return '%s:%s:%s' % (hours, minutes, seconds) 
 
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
 
     def __init__(self, dir=[__SSH_DIR__]):
         self.dir = dir
+        self._name = ','.join(self.dir)
         self._data = []
         for d in self.dir:
             self._data.extend(load_ssh_dir(d))
 
         self.__initalMode = 0
         super(MainFrame, self).__init__()
+        self.setWindowTitle(self._name)
         self.setWindowIcon(getAppIcon())
         self.initUI()
         self.centerWindow()
-        self.setMinimumSize(1800, 1000)
-
-
-
 
     def initUI(self):
-        mWidgets = QtWidgets.QWidget()
-        mlayout = QtWidgets.QVBoxLayout()
 
-        widgets = ThumbnailListViewer(parent=self)
+        self.tabWidget = QtWidgets.QTabWidget(self)
+        self.tabWidget.setTabsClosable(True)
+
+        # Main thumbnail widgets
         self.models = []
         model = ListModel(data=self._data, parent=self)
         self.models.append(model)
-        widgets.setModel(model)
-        mlayout.addWidget(widgets)
-        mWidgets.setLayout(mlayout)
-        self._widgets = widgets
-        self._widgets.setIconView()
-        self._widgets.model().fupate.connect(self._widgets.force_update)
 
-        setUpdatePeriod = QtWidgets.QLineEdit(self)
-        setUpdatePeriod.setPlaceholderText(str(model.updatePeriod()))
-        setUpdatePeriod.setMaximumWidth(40)
-        setUpdatePeriod.editingFinished.connect(self.set_updatePeriod)
+        self._thumbnailWidget = ThumbnailWidget(parent=self, model=model)
+        self.table = SSHWidget(self._thumbnailWidget.thumbnailListView.model().getData())
 
-        self.search = QtWidgets.QLineEdit(self)
-        self.search.setPlaceholderText("Enter address/tags to search")
-        self.search.textChanged.connect(self.on_search)
+        self.tabWidget.addTab(self._thumbnailWidget, "Thumbnail")
+        self.tabWidget.addTab(self.table, "SSHTable - {}".format(self._name))
+        self.setCentralWidget(self.tabWidget)
 
-        self.scale = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.scale.setMinimum(10)
-        self.scale.setMaximum(100)
-        self.scale.setTickInterval(10)
-        self.scale.setTickPosition(QtWidgets.QSlider.TicksBothSides)
-        self.scale.setFixedWidth(150)
-        self.scale.setValue(30)
-        self.scale.valueChanged.connect(self.on_scale)
-
-        self.sort_order = True
-        self.sort_order_button = QtWidgets.QToolButton()
-        self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
-        self.sort_order_button.clicked.connect(self.re_sort)
-        self.sort_by = QtWidgets.QLineEdit(self)
-        self.sort_by.setPlaceholderText("Enter key to sort")
-        self.sort_by.editingFinished.connect(self.on_sort)
-        self.sort_by.setMaximumWidth(300)
-
-        self.table = SSHWidget(widgets.model().getData())
-        self.table.setMinimumSize(800, 600)
-        self.table.setWindowTitle('SSH Table')
-        self.setCentralWidget(mWidgets)
-
-        # self.exitAction = QtWidgets.QAction('Exit', self)
-        # self.exitAction.setShortcut('Ctrl+Q')
-        # self.exitAction.triggered.connect(self.on_exit)
+        self.exitAction = QtWidgets.QAction('Exit', self)
+        self.exitAction.setShortcut('Ctrl+Q')
+        self.exitAction.triggered.connect(self.on_exit)
 
         self.loadAction = QtWidgets.QAction('Load Directory', self)
         self.loadAction.triggered.connect(self.loadDir)
-
-        self.iconViewAction = QtWidgets.QAction('Icon View', self)
-        self.iconViewAction.triggered.connect(self._widgets.setIconView)
-
-        self.detailViewAction = QtWidgets.QAction('List View', self)
-        self.detailViewAction.triggered.connect(self._widgets.setListView)
-
-        self.sortByNameAction = QtWidgets.QAction('Sort by Name', self)
-        self.sortByNameAction.triggered.connect(self.on_sort_by_name)
-
-        self.sortByStatusAction = QtWidgets.QAction('Sort by Status', self)
-        self.sortByStatusAction.triggered.connect(self.on_sort_by_status)
-
-        QtWidgets.QShortcut(
-                QtGui.QKeySequence("Ctrl+F"),
-                self).activated.connect(lambda: self.search.setFocus())
-
-        QtWidgets.QShortcut(
-                QtGui.QKeySequence("escape"),
-                self).activated.connect(lambda: self.search.clear())
-
-        self.openSSHTableAction = QtWidgets.QAction('Open Table', self)
-        self.openSSHTableAction.triggered.connect(
-                lambda: self.table.setVisible(True))
-
-        self.toolbar = self.addToolBar('Main')
-        self.toolbar.addAction(self.iconViewAction)
-        self.toolbar.addAction(self.detailViewAction)
-        self.toolbar.addAction(self.openSSHTableAction)
-        self.toolbar.addWidget(self.scale)
-
-        self.toolbar.addSeparator()
-        self.toolbar.addWidget(setUpdatePeriod)
-        self.toolbar.addWidget(QtWidgets.QLabel("Update Period"))
-
-        self.toolbar.addSeparator()
-        self.toolbar.addWidget(self.search)
-
-        self.toolbar.addAction(self.sortByNameAction)
-        self.toolbar.addAction(self.sortByStatusAction)
-        self.toolbar.addSeparator()
-        self.toolbar.addWidget(self.sort_by)
-        self.toolbar.addWidget(self.sort_order_button)
-        self.toolbar.addSeparator()
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&File')
         fileMenu.addAction(self.loadAction)
         fileMenu.addSeparator()
 
-        self.setWindowTitle("SSH-VNC {}".format(self.dir))
-        self.setUpdatePeriod = setUpdatePeriod
+        self.setWindowTitle("SSH-VNC {}".format(self._name))
 
-    def set_updatePeriod(self):
-        try:
-            d = int(self.setUpdatePeriod.text())
-            self._widgets.model().setUpdatePeriod(d)
-        except Exception:
+    def loadDir(self):
+        d = QtWidgets.QFileDialog.getExistingDirectory(self, "VPS directory", "", QtWidgets.QFileDialog.ShowDirsOnly)
+        if not d:
             return
+        data = load_ssh_dir(d)
+        model = ListModel(data=data, parent=self)
+        self.models.append(model)
+        thumbnailWidget = ThumbnailWidget(parent=self, model=model)
+        table = SSHWidget(model.getData())
+        self.tabWidget.addTab(thumbnailWidget, "Thumbnail - " + str(d))
+        self.tabWidget.addTab(table, "SSHTable - " + str(d))
+        return
+
 
     def on_exit(self):
         common.close_all = True
@@ -194,34 +124,6 @@ class MainFrame(QtWidgets.QMainWindow):
         else:
             event.ignore()
 
-    def on_scale(self, value):
-        self._widgets.scaleIcon(float(value/100.0))
-
-    def re_sort(self):
-        if self.sort_order:
-            self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
-        else:
-            self.sort_order_button.setArrowType(QtCore.Qt.UpArrow)
-        self.sort_order = not self.sort_order
-        self.on_sort()
-
-    def on_sort_by_name(self):
-        self.sort_order = not self.sort_order
-        self._widgets.model().sort(self.sort_order)
-
-    def on_sort_by_status(self):
-        self.sort_order = not self.sort_order
-        self._widgets.model().sort_by("icon", self.sort_order)
-
-    def on_sort(self):
-        self._widgets.model().sort_by(self.sort_by.text(), self.sort_order)
-
-    def on_search(self, event):
-        for i in range(self._widgets.model().count()):
-            item = self._widgets.model().itemAtRow(i)
-            hide = not (str(event) in str(item.config))
-            self._widgets.setRowHidden(i, hide)
-
     def centerWindow(self):
         frameGm = self.frameGeometry()
         screen = QApplication.desktop().screenNumber(
@@ -237,8 +139,6 @@ class MainFrame(QtWidgets.QMainWindow):
         pad = '\t'
         QtWidgets.QMessageBox.warning(self, "Warning!", aMessage + pad)
 
-    def loadDir(self):
-        pass
 
     def getErrorDialog(self, text, infoText, detailedText):
         dlg = QtWidgets.QMessageBox(self)
@@ -304,6 +204,8 @@ if __name__ == '__main__':
         w = MainFrame()
 
     w.move(0, 0)
+    w.setGeometry(0, 0, 1000, 1000)
+
     if os.path.isfile('stylesheet.css'):
         with open('stylesheet.css', 'r') as fp:
             w.setStyleSheet(fp.read())

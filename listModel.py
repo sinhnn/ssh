@@ -263,6 +263,127 @@ class ThumbnailListViewer(SSHActions, QtWidgets.QListView):
         return self.model().itemAtRow(row)
 
 
+class ThumbnailWidget(QtWidgets.QWidget):
+
+    """Docstring for ThumbnailWidget. """
+
+    def __init__(self, parent, model, **kwargs):
+        QtWidgets.QWidget.__init__(self, parent)
+
+        self._parent = parent
+        self._layout = QtWidgets.QVBoxLayout()
+        self.thumbnailListView = ThumbnailListViewer(parent=self)
+        self.thumbnailListView.setModel(model)
+        self.thumbnailListView.setIconView()
+        self.thumbnailListView.model().fupate.connect(self.thumbnailListView.force_update)
+        self._layout.addWidget(self.thumbnailListView)
+        self.setLayout(self._layout)
+
+        self.initOpts()
+
+    def initOpts(self):
+        setUpdatePeriod = QtWidgets.QLineEdit(self)
+        setUpdatePeriod.setPlaceholderText(str(self.thumbnailListView.model().updatePeriod()))
+        setUpdatePeriod.setMaximumWidth(40)
+        setUpdatePeriod.editingFinished.connect(self.set_updatePeriod)
+
+        self.scale = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.scale.setMinimum(10)
+        self.scale.setMaximum(100)
+        self.scale.setTickInterval(10)
+        self.scale.setTickPosition(QtWidgets.QSlider.TicksBothSides)
+        self.scale.setFixedWidth(150)
+        self.scale.setValue(30)
+        self.scale.valueChanged.connect(self.on_scale)
+
+        self.sort_order = True
+        self.sort_order_button = QtWidgets.QToolButton()
+        self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
+        self.sort_order_button.clicked.connect(self.re_sort)
+        self.sort_by = QtWidgets.QLineEdit(self)
+        self.sort_by.setPlaceholderText("Enter key to sort")
+        self.sort_by.editingFinished.connect(self.on_sort)
+        self.sort_by.setMaximumWidth(300)
+
+        self.iconViewAction = QtWidgets.QAction('Icon View', self)
+        self.iconViewAction.triggered.connect(self.thumbnailListView.setIconView)
+
+        self.detailViewAction = QtWidgets.QAction('List View', self)
+        self.detailViewAction.triggered.connect(self.thumbnailListView.setListView)
+
+        self.sortByNameAction = QtWidgets.QAction('Sort by Name', self)
+        self.sortByNameAction.triggered.connect(self.on_sort_by_name)
+
+        self.sortByStatusAction = QtWidgets.QAction('Sort by Status', self)
+        self.sortByStatusAction.triggered.connect(self.on_sort_by_status)
+
+        QtWidgets.QShortcut(
+                QtGui.QKeySequence("Ctrl+F"),
+                self).activated.connect(lambda: self.search.setFocus())
+
+        QtWidgets.QShortcut(
+                QtGui.QKeySequence("escape"),
+                self).activated.connect(lambda: self.search.clear())
+
+        self.toolbar = QtWidgets.QToolBar(self)
+        self.toolbar.addAction(self.iconViewAction)
+        self.toolbar.addAction(self.detailViewAction)
+        self.toolbar.addWidget(self.scale)
+
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(setUpdatePeriod)
+        self.toolbar.addWidget(QtWidgets.QLabel("Update Period"))
+
+        self.toolbar.addSeparator()
+        # self.toolbar.addWidget(self.search)
+
+        self.toolbar.addAction(self.sortByNameAction)
+        self.toolbar.addAction(self.sortByStatusAction)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(self.sort_by)
+        self.toolbar.addWidget(self.sort_order_button)
+        self.toolbar.addSeparator()
+
+        self._layout.setMenuBar(self.toolbar)
+
+    def on_scale(self, value):
+        self.thumbnailListView.scaleIcon(float(value/100.0))
+
+    def re_sort(self):
+        if self.sort_order:
+            self.sort_order_button.setArrowType(QtCore.Qt.DownArrow)
+        else:
+            self.sort_order_button.setArrowType(QtCore.Qt.UpArrow)
+        self.sort_order = not self.sort_order
+        self.on_sort()
+
+    def on_sort_by_name(self):
+        self.sort_order = not self.sort_order
+        self.thumbnailListView.model().sort(self.sort_order)
+
+    def on_sort_by_status(self):
+        self.sort_order = not self.sort_order
+        self.thumbnailListView.model().sort_by("icon", self.sort_order)
+
+    def on_sort(self):
+        self.thumbnailListView.model().sort_by(self.sort_by.text(), self.sort_order)
+
+    def on_search(self, event):
+        for i in range(self.thumbnailListView.model().count()):
+            item = self.thumbnailListView.model().itemAtRow(i)
+            hide = not (str(event) in str(item.config))
+            self.thumbnailListView.setRowHidden(i, hide)
+
+    def set_updatePeriod(self):
+        try:
+            d = int(self.setUpdatePeriod.text())
+            self.thumbnailListView.model().setUpdatePeriod(d)
+        except Exception:
+            return
+
+
+
+
 def main():
     import logging
     logging.basicConfig(

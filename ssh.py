@@ -18,6 +18,7 @@ import traceback
 # import common
 from port import PortScanner
 from remoteFile import EncryptedRemoteFile
+from watch_file import WatchFile
 import utils
 
 from tunnel import SSHTunnelForwarder
@@ -35,7 +36,7 @@ from platform_ssh import (
     CHROME,
 )
 
-SSH_MAX_FAILED = 100
+SSH_MAX_FAILED = 20
 SSH_TUNNEL_START = 6000
 SSH_TUNNEL_END = 10000
 REMOTE_BIND_ADDRESS = ("127.0.0.1", 5901)
@@ -181,6 +182,9 @@ class SSHClient(object):
             'disabled': os.path.join(self.root, 'disabled'),
             'failed': os.path.join(self.root, 'failed')
         }
+        self._watch_files = {
+            'account': WatchFile(self.path('account.txt'))
+        }
         self.create_data_dir()
 
         self.id = SSHClient.NEXT_ID
@@ -195,6 +199,8 @@ class SSHClient(object):
         self.lastupdate = "None"
         self.changed = []
         self.status = {
+            'path': self.root,
+            'account': self._watch_files['account'].value,
             'disabled': lambda: str(os.path.isfile(self.files['disabled'])),
             'ping': -1,
             'lastcmd': FakeStdOut(

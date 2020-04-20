@@ -183,6 +183,7 @@ class SSHInputDialog(QtWidgets.QDialog):
         self.browser.clicked.connect(self.__browser__)
         layout.addWidget(self.browser, 3, 0)
         self.private_key_file = QtWidgets.QLineEdit(self)
+        self.private_key_file.setText('C:/Users/sinhnn/.ssh/vps/id_rsa')
         layout.addWidget(self.private_key_file, 3, 1)
 
         layout.addWidget(QtWidgets.QLabel("Tags"), 4, 0)
