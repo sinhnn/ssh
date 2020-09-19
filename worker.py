@@ -30,6 +30,7 @@ class Worker(QRunnable):
         super(Worker, self).__init__()
         # Store constructor arguments (re-used for processing)
         self.fn = fn
+        self._name = fn.__name__
         self.id = id
         Worker.id += 1
         self.args = args
@@ -42,7 +43,8 @@ class Worker(QRunnable):
         # self.kwargs['progress_callback'] = self.signals.progress
 
     def __str__(self):
-        return '[{}] Worker({}, {}, {})'.format(self.done, self.fn, self.args, self.kwargs)
+        # return '[{}] Worker({}, {}, {})'.format(self.done, self._name, self.args, self.kwargs)
+        return '[{}] {}({}, {})'.format(self.done, self._name, self.args, self.kwargs)
 
     def __eq__(self, other):
         return (self.id == other.id)
@@ -110,7 +112,6 @@ class MainWindow(QMainWindow):
         for n in range(0, 5):
             time.sleep(1)
             progress_callback.emit((n*100/4, 'blabla'))
-
         return "Done."
 
     def print_output(self, s):

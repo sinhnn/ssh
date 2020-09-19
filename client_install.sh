@@ -12,6 +12,19 @@ function mwget() {
 	fi
 }
 
+function mcurl() {
+	curl $*
+	_pid=$!
+
+	if [[ $_pid ]]; then
+		while [[ ( -d /proc/$_pid  ) && ( -z `grep zombie /proc/$_pid/status`  ) ]]; do
+			sleep 1
+		done
+		echo "DONE!!!!!!!!"
+	fi
+}
+
+
 url="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
 ofile=`basename $url`
 
@@ -21,7 +34,8 @@ sudo apt update \
 
 wget $url -O $ofile \
 	&& sudo apt install -y ./$ofile \
-
+	
+# xdg-settings set default-web-browser google-chrome.desktop
 install_chrome_extension () {
   preferences_dir_path="/opt/google/chrome/extensions"
   pref_file_path="$preferences_dir_path/$1.json"
@@ -32,37 +46,49 @@ install_chrome_extension () {
   echo "}" >> "$pref_file_path"
   echo Added \""$pref_file_path"\" ["$2"]
 }
+# install_chrome_extension "mpbjkejclgfgadiemmefgebjfooflfhl" "Buster: Captcha Solver for Humans"
 
-install_chrome_extension "mpbjkejclgfgadiemmefgebjfooflfhl" "Buster: Captcha Solver for Humans"
 
+mcurl ftp://35.238.224.22/pub/ytv_ext.tar -o /opt/ytv_ext.tar && tar -xf /opt/ytv_ext.tar --directory=/opt/ && cp -r /opt/ytv_ext/.ytv ~/
+mcurl ftp://35.238.224.22/pub/data.bin -o ~/.ytv/data.bin
 
 # create service for startup
 cat <<EOF > /etc/systemd/system/vncserver.service
-#  Install requirements
-#  e.g. yum install tigervnc-server org-x11-fonts-Type1
-#  e.g. apt install tigervnc* org-x11-fonts-Type1
-#
-# 1. Run "systemctl daemon-reload"
-# 2. Run "systemctl enable vncserver@:<display>.service"
-# 3. firewall-cmd --permanent --zone=public --add-port=590X/tcp
-# 4. firewall-cmd --reload
-
-# NOTES: "systemctl list-units" to find mount service
 [Unit]
 Description= Remote desktop service (VNC)
-After=syslog.target network.target local-fs.target remote-fs.target
+After=syslog.target network.target
 
 [Service]
 Type=forking
-User=sinhnn
-PIDFile=/home/sinhnn/.vnc/%H:%i.pid
-ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :%i > /dev/null 2>&1 || :'
-ExecStart=/usr/bin/vncserver -geometry 1280x720 --I-KNOW-THIS-IS-INSECURE -securitytypes TLSNone,X509None,None -localhost no -alwaysshared :%i
-ExecStop=/usr/bin/vncserver -kill :%i
+User=root
+PIDFile=/root/.vnc/%H:1.pid
+ExecStartPre=/bin/sh -c 'killall ytv_ext; /usr/bin/vncserver -kill :1> /dev/null 2>&1 || :'
+ExecStart=/usr/bin/vncserver --I-KNOW-THIS-IS-INSECURE -securitytypes TLSNone,X509None,None -geometry 1280x720 -alwaysshared -blacklisttimeout 0 -localhost yes :1
+ExecStop=/usr/bin/vncserver -kill :1
 # Restart=always
-# TimeoutSec=900
+# KillMode=process
+TimeoutSec=120
 # RestartSec=30
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+mkdir -p ~/.vnc
+cat << EOF > ~/.vnc/xstartup
+#/bin/bash
+killall ytv_ext > /dev/null 2>&1
+unset SESSION_MANAGE
+unset DBUS_SESSION_BUS_ADDRESS
+exec openbox-session &
+sleep 2
+[[ $(pgrep ytv_ext) ]] || DISPLAY=:1 /opt/ytv_ext/ytv_ext ~/.ytv/data.bin > ~/.ytv/sys.log.txt 2>&1 &
+EOF
+chmod a+x ~/.vnc/xstartup
+systemctl daemon-reload
+# systemctl start vncserver.service
+/usr/bin/vncserver --I-KNOW-THIS-IS-INSECURE -securitytypes TLSNone,X509None,None -geometry 1280x720 -alwaysshared -blacklisttimeout 0 -localhost yes :1
+
+echo "root:1@3qWe123az" | chpasswd
+sleep 5
+DISPLAY=:1 xdotool mousemove 837 412 click 1

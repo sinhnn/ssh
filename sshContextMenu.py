@@ -3,6 +3,7 @@ import subprocess
 import logging
 import json
 from PyQt5 import QtGui, QtWidgets, QtCore
+from collections import deque
 
 # My modules
 from worker import Worker
@@ -26,14 +27,16 @@ class SSHActions(object):
             self.tasklist = tasklist
 
         self.threadpool = QtCore.QThreadPool()
-        self.threadpool.setMaxThreadCount(50)
+        self.threadpool.setMaxThreadCount(20)
         self.threadpool.waitForDone(-1)
 
         self.scp_pool = QtCore.QThreadPool()
         self.scp_pool.setMaxThreadCount(5)
+        self.scp_pool.waitForDone(-1)
 
         self.backup_pool = QtCore.QThreadPool()
         self.backup_pool.setMaxThreadCount(5)
+        self.backup_pool.waitForDone(-1)
 
         self.vncviewer_threads = QtCore.QThreadPool()
         self.vncviewer_threads.setMaxThreadCount(10)
@@ -63,11 +66,17 @@ class SSHActions(object):
             worker = Worker(item.firefox_via_sshtunnel)
             self.vncviewer_threads.start(worker)
 
+    def chrome_via_sshtunnel(self):
+        for item in self.selectedItems():
+            worker = Worker(item.chrome_via_sshtunnel)
+            self.vncviewer_threads.start(worker)
+
     def selectedItems(self, select_all=False):
         return []
 
-    def create_tunnel(self, port=None):
-        pass
+    def create_socks5_tunnel(self, port=None):
+        for item in self.selectedItems():
+            item.create_socks5()
 
     def open_vncviewer(self):
         for item in self.selectedItems():
@@ -123,8 +132,12 @@ class SSHActions(object):
         for item in self.selectedItems(select_all=select_all):
             logging.info("try to send command {} to {}".format(cmd, str(item)))
             worker = Worker(item.exec_command, cmd, store=True)
+            # item.exec_command(cmd) #, store=True)
+            # logging.info("created new worker {}".format(worker))
             self.tasklist.append(worker)
+            # logging.info("added worker to takslist{}".format(worker))
             self.threadpool.start(worker)
+            # logging.info("run worker to takslist{}".format(worker))
 
     def open_terminal(self, command=None):
         for item in self.selectedItems():
@@ -269,6 +282,7 @@ class SSHActions(object):
             self.terminal_threads.start(worker)
 
     def move_to_trash(self):
+        items = self.selectedItems()
         for item in self.selectedItems():
             f = item.get('filepath')
             dirname = os.path.join(os.path.dirname(f), 'Trash')
@@ -282,6 +296,7 @@ class SSHActions(object):
                 self.model().removeItem(item)
             except Exception as e:
                 logging.error(e, exc_info=True)
+        return items
 
     def copy_ssh_cmd(self):
         t = []
@@ -297,12 +312,18 @@ class SSHActions(object):
         self.viewport().update(rect)
 
     def new_item(self):
-        dialog = SSHInputDialog(parent=self)
+        try:
+            # no selected items
+            item = self.selectedItems()[0]
+            dialog = SSHInputDialog(parent=self, root=os.path.dirname(item.path()))
+        except Exception:
+            dialog = SSHInputDialog(parent=self)
         r = dialog.getResult()
         if not r:
             return
         for f in r:
             item = load_ssh_file(f)
             item.info['filepath'] = str(r)
-            self.model().appendItem(item)
+            if item.get('hostname') not in self.model().hostnames:
+                self.model().appendItem(item)
 

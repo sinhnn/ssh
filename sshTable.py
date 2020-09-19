@@ -7,11 +7,13 @@ import re
 import os
 import time
 import threading
+import io
 # import subprocess
 import json
 import logging
 from collections import OrderedDict
 from functools import partial
+import sys, csv, io
 
 
 from PyQt5.QtWidgets import (
@@ -24,6 +26,7 @@ from PyQt5.QtWidgets import (
 from common import close_all
 from PyQt5 import QtGui, QtCore, QtWidgets
 # from PyQt5.QtCore import pyqtSlot
+from lineEditCompleter import LineEditCompleter
 from ObjectsTableModel import (
         ObjectsTableModel as MyTableModel,
         ComboBoxModel,
@@ -32,6 +35,7 @@ from ObjectsTableModel import (
 # import random
 
 # =============================================================================
+import ssh
 from ssh import load_ssh_file, load_ssh_dir
 # import crypt
 # from sshDialogForm import SCPDialog, SSHInputDialog
@@ -44,6 +48,13 @@ __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
 
 
+def path(*args):
+    return os.path.join(__PATH__, *args)
+
+
+__BASH_HISTORY__ = path("bash_history")
+
+
 class SSHTable(SSHActions, QTableView):
     # def __init__(self, data=[], dir=__SSH_DIR__, **kwargs):
     def __init__(self, tasklist, parent=None, **kwargs):
@@ -53,8 +64,9 @@ class SSHTable(SSHActions, QTableView):
         self.configTable()
         self.setAlternatingRowColors(True)
         self.setStyleSheet('font-family: Consolas; font-size: 8;')
-
+        self.installEventFilter(self)
         self.setFont(QtGui.QFont("Consolas", 8))
+        self.doubleClicked.connect(self.on_click)
 
     def configTable(self):
         self.horizontalHeader().setStretchLastSection(True)
@@ -81,6 +93,8 @@ class SSHTable(SSHActions, QTableView):
             'open_terminal': self.open_terminal,
             'open_terminal_with_cmd': self.open_terminal_with_cmd,
             'firefox_via_sshtunnel': self.firefox_via_sshtunnel,
+            'chrome_via_sshtunnel': self.chrome_via_sshtunnel,
+            'create_socks5_tunnel': self.create_socks5_tunnel,
             'ping': self.ping,
             'new': self.new_item,
             'open_folder': self.open_folder,
@@ -117,12 +131,51 @@ class SSHTable(SSHActions, QTableView):
         allrows = list(set([i.row() for i in self.selectedIndexes()]))
         return [model.itemAtRow(i) for i in allrows]
 
+    def eventFilter(self, source, event):
+        if (event.type() == QtCore.QEvent.KeyPress and event.matches(QtGui.QKeySequence.Copy)):
+            self.copySelection()
+            return True
+        return super(SSHTable, self).eventFilter(source, event)
+
+    def copySelection(self):
+        selection = self.selectedIndexes()
+        if selection:
+            rows = sorted(index.row() for index in selection)
+            columns = sorted(index.column() for index in selection)
+            rowcount = rows[-1] - rows[0] + 1
+            colcount = columns[-1] - columns[0] + 1
+            table = [[''] * colcount for _ in range(rowcount)]
+            for index in selection:
+                row = index.row() - rows[0]
+                column = index.column() - columns[0]
+                table[row][column] = index.data()
+            stream = io.StringIO()
+            csv.writer(stream).writerows(table)
+            QtWidgets.qApp.clipboard().setText(stream.getvalue())
+
+
     def force_update(self, index):
         rect = self.visualRect(index)
         self.viewport().update(rect)
 
     def setColumnVisible(self, i, hide):
         self.setColumnHidden(i, not hide)
+
+
+    def on_click(self, index):
+        try:
+            m = self.model()
+            item = m.itemAtRow(index.row())
+            if not item: return None
+            header = m.headername(index)
+            f = header + '.txt'
+            if f in ssh.WATCH_FILES:
+                if not os.path.isfile(item.path(f)):
+                    open(item.path(f), 'w').write('')
+                return os.startfile(item.path(f))
+            return os.startfile(item.path())
+        except Exception:
+            return None
 
 
 class SSHWidget(QtWidgets.QWidget):
@@ -140,7 +193,7 @@ class SSHWidget(QtWidgets.QWidget):
         self.refresh_pool = QtCore.QThreadPool()
         self.refresh_pool.setMaxThreadCount(5)
         self.initUI()
-        self.daemon()
+        self.daemon(self.refreshTaskList)
 
     def initUI(self):
         layout = QtWidgets.QVBoxLayout()
@@ -178,13 +231,19 @@ class SSHWidget(QtWidgets.QWidget):
         search = QtWidgets.QLineEdit(self)
         search.textChanged.connect(self.on_search)
         self.search = search
+        self.search.setFixedWidth(150)
 
-        command = QtWidgets.QLineEdit(self)
+        command = LineEditCompleter(
+                completer_file=__BASH_HISTORY__,
+                parent=self
+        )
+        command.returnPressed.connect(self.send_to_all)
         # search.textChanged.connect(self.on_command)
         self.command = command
 
         self.info = QtWidgets.QLineEdit(self)
         self.info.setReadOnly(True)
+        self.info.setFixedWidth(120)
 
         layout.addWidget(search)
         layout.addWidget(QtWidgets.QLabel("Search"))
@@ -232,25 +291,37 @@ class SSHWidget(QtWidgets.QWidget):
 
     def send_to_all(self):
         cmd = self.command.text()
+        print("Send to all: {}".format(cmd))
         self.tableview.exec_command(cmd=cmd, select_all=True)
 
     def refreshTaskList(self):
         while (True):
-            for t in self.tasklist.getdata():
+            # changed = False
+            for t in self.tasklist.getdata().copy():
                 try:
                     if t.done is True:
                         self.tasklist.remove(t)
+                        # reload tasklist avoid segmentation fault
+                        # changed = True
                 except Exception:
                     pass
-                self.info.setText('ThreadPool={}/scp={}/backup={}'.format(
-                    self.tableview.threadpool.activeThreadCount(),
-                    self.tableview.scp_pool.activeThreadCount(),
-                    self.tableview.backup_pool.activeThreadCount()
-                    ))
+
+                # self.info.setText('ThreadPool={}'.format(
+                    # self.tableview.threadpool.activeThreadCount(),
+                    # ))
+                # self.info.setText('ThreadPool={}/scp={}/backup={}'.format(
+                #     self.tableview.threadpool.activeThreadCount(),
+                #     self.tableview.scp_pool.activeThreadCount(),
+                #     self.tableview.backup_pool.activeThreadCount()
+                #     ))
+                # if changed is True:
+                    # break
 
             if close_all is True:
                 break
             time.sleep(1)
+            # if changed is False:
+                # time.sleep(1)
 
     def refreshLog(self):
         while(True):
@@ -268,8 +339,8 @@ class SSHWidget(QtWidgets.QWidget):
                 break
             time.sleep(5)
 
-    def daemon(self):
-        for t in [self.refreshTaskList]:
+    def daemon(self, *args):
+        for t in args:
             t = threading.Thread(target=t)
             t.daemon = True
             t.start()
@@ -281,7 +352,7 @@ class SSHWidget(QtWidgets.QWidget):
         model = self.tableview.model()
         for i in range(0, model.rowCount()):
             item = model.itemAtRow(i)
-            hide = pattern not in str(item)
+            hide = pattern not in item.full()
             self.tableview.setRowHidden(i, hide)
 
 

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #  ObjectsTableModel.py Author "sinhnn <sinhnn.92@gmail.com>" Date 16.12.2019
 
-# from PyQt5 import QtGui
+from PyQt5 import QtGui
 # from PyQt5 import QtWidgets
 from PyQt5.QtCore import (Qt, QAbstractTableModel, QModelIndex, QVariant)
 from PyQt5 import QtCore
@@ -100,6 +100,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         super(ObjectsTableModel, self).__init__(**kwargs)
         self._header = [
                 'path',
+                # 'createdDate',
                 'hostname',
                 'account',
                 'disabled',
@@ -115,9 +116,9 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
                 # 'next_data',
                 # 'email',
                 # 'ytvlog',
-                # 'lastcmd',
-                'msg',
+                'lastcmd',
                 'error',
+                'msg',
         ]
 
         self._data = data
@@ -162,6 +163,20 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
             time.sleep(1)
             firstRun = False
 
+    @property
+    def hostnames(self):
+        return [s.get("hostname") for s in self._data]
+
+    def dublicate_hostname(self, index):
+        citem = self._data[index.row()]
+        hostname = citem.get("hostname")
+        i = 0
+        for h in self.hostnames:
+            if h == hostname:
+                i += 1
+            if i > 1: return True
+        return False
+
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)
 
@@ -187,17 +202,19 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
         if not index.isValid():
             logging.debug("invalid index")
             return QVariant()
-        elif not 0 <= index.row() < len(self._data):
+        if not 0 <= index.row() < len(self._data):
             logging.debug("row is out of data range")
             return QVariant()
-        elif role not in [Qt.DisplayRole, Qt.EditRole]:
-            return QVariant()
-        elif role in [Qt.DisplayRole, Qt.EditRole]:
+        # if role not in [Qt.DisplayRole, Qt.EditRole]:
+            # return QVariant()
+        if role in [Qt.DisplayRole, Qt.EditRole]:
             try:
                 value = self._data[index.row()].get(self.headername(index), '')
                 return str(value)
             except Exception:
                 return ''
+        if role == Qt.BackgroundRole and index.column() == self._header.index("hostname") and self.dublicate_hostname(index):
+            return QtGui.QBrush(QtGui.QColor("red")) 
         return QVariant()
 
     def insertRows(self, position, rows=1, index=QModelIndex()):
@@ -264,6 +281,7 @@ class ObjectsTableModel(QtCore.QAbstractTableModel):
 
     def removeItem(self, item):
         row = self.__data__.index(item)
+        print("removing item {} at {}".format(item, row))
         self.beginRemoveRows(QtCore.QModelIndex(), row, row)
         self.__data__.remove(item)
         self.endRemoveRows()

@@ -4,6 +4,7 @@ import datetime
 import threading
 import time
 import re
+from pathlib import Path, PurePath
 import psutil
 import json
 import logging
@@ -75,6 +76,10 @@ def intersection(l1, l2):
 def delete_file(path):
     if os.path.isfile(str(path)):
         os.remove(str(path))
+
+
+# def stem(path):
+    # return str(PurePath(path).stem)
 
 
 def __open_vncviewer__(*args):
@@ -152,6 +157,11 @@ class StoredLoggerHandler(logging.FileHandler):
         return '\n'.join(msgs)
 
 
+WATCH_FILES = ['account.txt']
+ENCRYPTED_FILES = ['data.bin',]
+WATCH_DIRS = ['backup', 'cache']
+
+
 class SSHClient(object):
     ''' SSH, SCP, SSH tunnel, VNCViewer via SSH tunnel '''
     __REQUIRED__ = ['hostname', 'username']
@@ -162,30 +172,19 @@ class SSHClient(object):
         self.info = utils.rm_empty(info)
         self.config = self.info.get('config', {})
         self.fileConfig = fileConfig
-
+        self.info['createdDate'] = datetime.datetime.fromtimestamp(os.path.getmtime(self.fileConfig)).strftime("%Y%m%d-%H%M")
+        # relative path or absolute path
         if self.config.get('key_filename') == 'id_rsa':
-            self.config['key_filename'] = os.path.join(
-                    os.path.dirname(self.fileConfig),
-                    'id_rsa'
-            )
+            self.config['key_filename'] = os.path.join(os.path.dirname(self.fileConfig), 'id_rsa')
 
         self.root = os.path.join(
                 os.path.dirname(fileConfig),
                 self.config.get('hostname')
         )
 
-        self.dirs = {
-            'backup': os.path.join(self.root, 'backup'),
-            'cache': os.path.join(self.root, 'cache')
-        }
-        self.files = {
-            'disabled': os.path.join(self.root, 'disabled'),
-            'failed': os.path.join(self.root, 'failed')
-        }
-        self._watch_files = {
-            'account': WatchFile(self.path('account.txt'))
-        }
-        self.create_data_dir()
+        self.watch_files = {PurePath(f).stem: WatchFile(self.path(f)) for f in WATCH_FILES}
+        for d in WATCH_DIRS:
+            os.makedirs(self.path(d), exist_ok=True)
 
         self.id = SSHClient.NEXT_ID
         SSHClient.NEXT_ID += 1
@@ -196,13 +195,12 @@ class SSHClient(object):
         self._client = None
         # self._ssh_client = None
         self._thumbnail_session = None
-        self.lastupdate = "None"
         self.changed = []
 
         self.status = {
             'path': self.root,
-            'account': self._watch_files['account'].value,
-            'disabled': lambda: str(os.path.isfile(self.files['disabled'])),
+            'disabled': self.disabled,
+            'lastupdate': None,
             'ping': -1,
             'lastcmd': FakeStdOut(
                 name='lastcmd',
@@ -258,17 +256,60 @@ class SSHClient(object):
         self.threads = []
         self.__failedConnect__ = 0
 
+    def __str__(self):
+        if self.get("X", 1) == 1:
+            return '{}'.format(self.config['hostname'])
+        return '{}_{}'.format(self.config['hostname'], self.get("X"))
+
+    def get(self, k, default=None):
+        '''get status/configuration key'''
+        r = default
+        if k in self.config.keys():
+            r = self.config[k]
+        elif k == 'allproc':
+            r = self.allproc()
+        elif k in self.status.keys():
+            r = self.status[k]
+        elif k in self.watch_files.keys():
+            r = self.watch_files[k].value
+        elif k in self.encrypted.keys():
+            r = self.encrypted[k]
+        elif k in self.info.keys():
+            r = self.info[k]
+        if callable(r):
+            return r()
+        else:
+            return r
+
+    @property
+    def disabled(self):
+        return os.path.isfile(self.path('disabled'))
+
+    def setEnabled(self, enable):
+        f = self.path('disabled')
+
+        if enable is True:
+            delete_file(f)
+
+        if enable is False:
+            if not os.path.isfile(f):
+                open(self.path('disabled'), 'w').write(str(True))
+
+    def full(self):
+        ''' return all information '''
+        infos = [str(v) for k, v in self.config.items()]
+        infos.extend([str(v.value) for k, v in self.watch_files.items()])
+        infos.extend([str(v) for k, v in self.status.items()])
+        return ' '.join(infos)
+
     def path(self, *args):
         return os.path.join(self.root, *args)
 
-    def create_data_dir(self):
-        try:
-            for k, v in self.dirs.items():
-                os.makedirs(v, exist_ok=True)
-            return True
-        except Exception as e:
-            self.log(e, exc_info=True, level=logging.ERROR)
-        return False
+    def cached_path(self, *args):
+        return self.path('cache', *args)
+
+    def backup_path(self, *args):
+        return self.path('backup', *args)
 
     def ping(self):
         r = ping3.ping(self.get("hostname"), unit='ms')
@@ -322,17 +363,6 @@ class SSHClient(object):
                 self.changed.append('raw')
         return True
 
-    def cached_path(self, name=None):
-        if name is None:
-            return self.dirs['cache']
-        return os.path.join(self.dirs['cache'], name)
-
-    def backup_path(self, name):
-        if name is None:
-            return self.dirs['backup']
-
-        return os.path.join(self.dirs['backup'], name)
-
     def loadFileConfig(self, path):
         try:
             with open(path, 'r') as fp:
@@ -350,6 +380,9 @@ class SSHClient(object):
         elif os.path.isfile(self.get('filepath')):
             self.loadFileConfig(self.get('filepath'))
             self.fileConfig = self.get('filepath')
+
+        for f in self.watch_files.keys():
+            self.status[f] = self.watch_files[f].value
 
     def initLogger(self):
         try:
@@ -378,11 +411,6 @@ class SSHClient(object):
         cmd = 'tail --lines=1 {}'.format(path)
         (rcmd, out, err) = self.exec_command(cmd)
         self.status['ytvlog'].write(''.join(out + err))
-
-    def __str__(self):
-        if self.get("X", 1) == 1:
-            return '{}'.format(self.config['hostname'])
-        return '{}_{}'.format(self.config['hostname'], self.get("X"))
 
     def allproc(self):
         allproc = []
@@ -427,25 +455,6 @@ class SSHClient(object):
                 + list(self.status.keys()) \
                 + list(self.encrypted.keys())
 
-    def get(self, k, default=None):
-        '''get status/configuration key'''
-        r = default
-        if k in self.config.keys():
-            r = self.config[k]
-        elif k == 'allproc':
-            r = self.allproc()
-        elif k == 'lastupdate':
-            r = self.lastupdate
-        elif k in self.status.keys():
-            r = self.status[k]
-        elif k in self.encrypted.keys():
-            r = self.encrypted[k]
-        elif k in self.info.keys():
-            r = self.info[k]
-        if callable(r):
-            return r()
-        else:
-            return r
         # return default
 
     def update(self, k, v):
@@ -571,11 +580,11 @@ class SSHClient(object):
         return results
 
     def check_failed_connection(self):
-        if os.path.isfile(self.files['disabled']):
+        if self.disabled:
             return False
 
         if self.__failedConnect__ > SSH_MAX_FAILED:
-            open(self.files['disabled'], 'w').write('')
+            self.setEnabled(False)
 
         return True
 
@@ -721,7 +730,7 @@ class SSHClient(object):
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy)
         try:
-            client.connect(timeout=5.0, **self.config)
+            client.connect(timeout=5.0, banner_timeout=60, **self.config)
             self.__failedConnect__ = 0
             return client
         except TimeoutError:
@@ -772,13 +781,13 @@ class SSHClient(object):
         port = self.portscanner.getAvailablePort(
                 range(SSH_TUNNEL_START+self.id*5+2, SSH_TUNNEL_END)
         )
-        print('creating tunnel via port {} and {}'.format(port, kwargs))
+        fp = open(self.path('tunnel.log'), 'w')
         args = [CMD]
         args.extend(self.__base_opt__())
         args.extend(KEEP_ALIVE)
         args.extend(['-C2vTnN'])
         args.extend(['-D', str(port)])
-        proc = psutil.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        proc = psutil.Popen(args, stdout=fp, stderr=fp) #, creationflags=subprocess.CREATE_NEW_CONSOLE)
         self.tunnel_proc.append(proc)
         time.sleep(1)
         self.changed.append('socks5')
@@ -1069,7 +1078,7 @@ class SSHClient(object):
 
             r = self.vncscreenshot_subprocess()
             if r:
-                self.lastupdate = datetime.datetime.now().strftime("%H:%M:%S")
+                self.status['lastupdate'] = datetime.datetime.now().strftime("%H:%M:%S")
             self.updating_thumbnail = False
             return True
         else:
@@ -1189,10 +1198,11 @@ class SSHClient(object):
         os.makedirs(profile_dir, exist_ok=True)
         (proc, port) = self.create_socks5()
         configs = [
-            'user_pref("media.peerconnection.ice.proxy_only_if_behind_proxy", true);',
             'user_pref("media.peerconnection.enabled", false);',
             'user_pref("network.proxy.socks", "127.0.0.1");',
+            'user_pref("network.proxy.socks", "127.0.0.1");',
             'user_pref("network.proxy.socks_port", {});'.format(port),
+            'user_pref("network.proxy.socks_remote_dns", true);'
             'user_pref("network.proxy.type", 1);'
         ]
         fp = open(self.path('ffprofile', 'user.js'), 'w')
@@ -1215,15 +1225,15 @@ class SSHClient(object):
 
     def chrome_via_sshtunnel(self):
         os.makedirs(self.path('chrome'), exist_ok=True)
-        (proc, port) = self.create_socks5()
+        (tunnel_proc, port) = self.create_socks5()
         proxy_server = '--proxy-server=socks5://127.0.0.1:' + str(port)
         args = [CHROME]
         args.append(proxy_server)
         args.append('--user-data-dir={}'.format(self.path('chrome')))
-        args.append('https://iplocation.com')
+        args.extend(['https://iplocation.com', 'https://whoer.net'])
         chproc = subprocess.call(args)
+        tunnel_proc.terminate()
         # create tunnel
-
 
 def load_ssh_dir(dir):
     results = []

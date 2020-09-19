@@ -7,6 +7,7 @@ import re
 import os
 import logging
 import json
+import datetime
 
 # from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore, QtWidgets
@@ -21,6 +22,30 @@ from ObjectsTableModel import (
 # import random
 # import ssh
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
+
+
+__SSH_DEFAULT_CONFIG__ = {
+    "config": {
+        "hostname": "",
+        "username": "root",
+        "password": "1@3qwE123az",
+        "key_filename": "C:/Users/sinhnn/.ssh/vps/id_rsa"
+    },
+    "tags": []
+}
+
+
+SSH_DEFAULT_CONFIG_FILE = os.path.join(__PATH__, 'ssh.default.json')
+SSH_DEFAULT_CONFIG = __SSH_DEFAULT_CONFIG__.copy()
+
+if os.path.isfile(SSH_DEFAULT_CONFIG_FILE):
+    try:
+        fp = open(SSH_DEFAULT_CONFIG_FILE, 'r')
+        d = json.load(fp)
+        SSH_DEFAULT_CONFIG.update(d)
+    except Exception:
+        print("error loading default config file, reuse base config")
+        SSH_DEFAULT_CONFIG = __SSH_DEFAULT_CONFIG__.copy()
 
 
 class LineEditDragable(QtWidgets.QLineEdit):
@@ -153,7 +178,8 @@ class SCPDialog(QtWidgets.QDialog):
 
 class SSHInputDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, **kwargs):
-        QtWidgets.QDialog.__init__(self, **kwargs)
+        QtWidgets.QDialog.__init__(self, parent=parent)
+        self._kwargs = kwargs.copy()
         self.parent = parent
         self.setWindowTitle("Choose command")
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
@@ -173,21 +199,24 @@ class SSHInputDialog(QtWidgets.QDialog):
 
         layout.addWidget(QtWidgets.QLabel("User Name"), 1, 0)
         self.usernameWidget = QtWidgets.QLineEdit(self)
+        self.usernameWidget.setText("root")
         layout.addWidget(self.usernameWidget, 1, 1)
 
         layout.addWidget(QtWidgets.QLabel("Password"), 2, 0)
         self.passwordWidget = QtWidgets.QLineEdit(self)
+        self.passwordWidget.setText(SSH_DEFAULT_CONFIG['config']['password'])
         layout.addWidget(self.passwordWidget, 2, 1)
 
         self.browser = QtWidgets.QPushButton("Browser Key File")
         self.browser.clicked.connect(self.__browser__)
         layout.addWidget(self.browser, 3, 0)
         self.private_key_file = QtWidgets.QLineEdit(self)
-        self.private_key_file.setText('C:/Users/sinhnn/.ssh/vps/id_rsa')
+        self.private_key_file.setText(SSH_DEFAULT_CONFIG['config']['key_filename'])
         layout.addWidget(self.private_key_file, 3, 1)
 
         layout.addWidget(QtWidgets.QLabel("Tags"), 4, 0)
         self.tags = QtWidgets.QLineEdit(self)
+        self.tags.setText(datetime.datetime.now().strftime("%Y-%m-%d"))
         layout.addWidget(self.tags, 4, 1)
 
         layout.addWidget(self.buttonBox, 5, 1)
@@ -216,7 +245,12 @@ class SSHInputDialog(QtWidgets.QDialog):
             return None
 
         dialog = QtWidgets.QFileDialog()
-        d = dialog.getExistingDirectory(self, "Choose Save Folder", "")
+        d = dialog.getExistingDirectory(
+                self,
+                "Choose Save Folder",
+                self._kwargs.get("root", "")
+        )
+        if not d: return []
 
         files = []
         for hostname in info['config']['hostname'].splitlines():
@@ -224,7 +258,8 @@ class SSHInputDialog(QtWidgets.QDialog):
                 continue
             of = os.path.join(d, hostname + '.json')
             if os.path.isfile(of):
-                os.rename(of, of + '.back')
+                print("{} already exists".format(of))
+                continue
             dinfo = info.copy()
             dinfo['config']['hostname'] = hostname
             with open(of, 'w') as fp:

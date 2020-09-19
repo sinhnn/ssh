@@ -33,7 +33,7 @@ class ListModel(QtCore.QAbstractListModel):
         self.__data__ = data
         self.__auto_update__ = auto_update
 
-        self._updatePeriod = 60
+        self._updatePeriod = 30
         self.threadpool = QtCore.QThreadPool()
         self.threadpool.setMaxThreadCount(50)
         self.threadpool.waitForDone(-1)
@@ -57,8 +57,23 @@ class ListModel(QtCore.QAbstractListModel):
             thread.start()
             self.threads.append(thread)
 
+    @property
+    def hostnames(self):
+        return [s.get("hostname") for s in self.__data__]
+
+    def dublicate_hostname(self, index):
+        citem = self.__data__[index.row()]
+        hostname = citem.get("hostname")
+        i = 0
+        for h in self.hostnames:
+            if h == hostname:
+                i += 1
+            if i > 1: return True
+        return False
+
     def setAutoUpdate(self, enable):
-        self.__auto_update__ = enable
+        self.__auto_update__ = bool(enable)
+        print("Toggle download thumbnail to {}".format(self.__auto_update__))
 
     def force_update_item(self, row):
         try:
@@ -67,9 +82,7 @@ class ListModel(QtCore.QAbstractListModel):
             if item not in self.__updating_item__:
                 self.__updating_item__.append(item)
                 r = item.update_vncthumnail()
-                if r:
-                    # self.dataChanged.emit(topLeft, topLeft, self.__role__)
-                    self.fupate.emit(topLeft)
+                # if r: self.fupate.emit(topLeft)
                 self.__updating_item__.remove(item)
         except Exception as e:
             logging.error(e, exc_info=True)
@@ -106,6 +119,7 @@ class ListModel(QtCore.QAbstractListModel):
 
     def removeItem(self, item):
         row = self.__data__.index(item)
+        print("removing item {} at {}".format(item, row))
         self.beginRemoveRows(QtCore.QModelIndex(), row, row)
         self.__data__.remove(item)
         self.endRemoveRows()
@@ -272,12 +286,15 @@ class ThumbnailWidget(QtWidgets.QWidget):
 
         self._parent = parent
         self._layout = QtWidgets.QVBoxLayout()
+        self._model = model
         self.thumbnailListView = ThumbnailListViewer(parent=self)
         self.thumbnailListView.setModel(model)
         self.thumbnailListView.setIconView()
         self.thumbnailListView.model().fupate.connect(self.thumbnailListView.force_update)
         self._layout.addWidget(self.thumbnailListView)
         self.setLayout(self._layout)
+
+        self.setFocusPolicy(QtCore.Qt.WheelFocus)
 
         self.initOpts()
 
@@ -317,13 +334,17 @@ class ThumbnailWidget(QtWidgets.QWidget):
         self.sortByStatusAction = QtWidgets.QAction('Sort by Status', self)
         self.sortByStatusAction.triggered.connect(self.on_sort_by_status)
 
-        QtWidgets.QShortcut(
-                QtGui.QKeySequence("Ctrl+F"),
-                self).activated.connect(lambda: self.search.setFocus())
+        self.enabledDownloadThumnnail = QtWidgets.QCheckBox("Enable Update Thumbnail")
+        self.enabledDownloadThumnnail.setChecked(True)
+        self.enabledDownloadThumnnail.stateChanged.connect(self._model.setAutoUpdate)
 
-        QtWidgets.QShortcut(
-                QtGui.QKeySequence("escape"),
-                self).activated.connect(lambda: self.search.clear())
+        # QtWidgets.QShortcut(
+        #         QtGui.QKeySequence("Ctrl+F"),
+        #         self).activated.connect(lambda: self.search.setFocus())
+
+        # QtWidgets.QShortcut(
+        #         QtGui.QKeySequence("escape"),
+        #         self).activated.connect(lambda: self.search.clear())
 
         self.toolbar = QtWidgets.QToolBar(self)
         self.toolbar.addAction(self.iconViewAction)
@@ -341,6 +362,7 @@ class ThumbnailWidget(QtWidgets.QWidget):
         self.toolbar.addAction(self.sortByStatusAction)
         self.toolbar.addSeparator()
         self.toolbar.addWidget(self.sort_by)
+        self.toolbar.addWidget(self.enabledDownloadThumnnail)
         self.toolbar.addWidget(self.sort_order_button)
         self.toolbar.addSeparator()
 
@@ -379,9 +401,25 @@ class ThumbnailWidget(QtWidgets.QWidget):
             d = int(self.setUpdatePeriod.text())
             self.thumbnailListView.model().setUpdatePeriod(d)
         except Exception:
-            return
+            pass
 
+    # def focusInEvent(self, event):
+    #     print("focus in event {}".format(event))
+    #     self.thumbnailListView.model().setAutoUpdate(True)
+    #     super().focusInEvent(self, event)
 
+    # def focusOutEvent(self, event):
+    #     print("focus out event {}".format(event))
+    #     self.thumbnailListView.model().setAutoUpdate(False)
+    #     super().focusOutEvent(self, event)
+
+    def enterEvent(self, event):
+        # self.thumbnailListView.model().setAutoUpdate(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        # self.thumbnailListView.model().setAutoUpdate(False)
+        super().leaveEvent(event)
 
 
 def main():

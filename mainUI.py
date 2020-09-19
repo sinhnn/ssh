@@ -6,6 +6,8 @@ import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication
 import logging
+import textwrap
+
 
 # My modules ==================================================================
 import common
@@ -22,6 +24,10 @@ from sshTable import (
 
 __PATH__ = os.path.dirname(os.path.abspath(__file__))
 __SSH_DIR__ = os.path.join(__PATH__, 'ssh')
+global IMAGE_ICON
+global TABLE_ICON
+
+
 if getattr(sys, 'frozen', False):
     __PATH__ = os.path.abspath(os.path.dirname(sys.executable))
 elif __file__:
@@ -35,7 +41,13 @@ def changeBackgroundColor(widget, colorString):
 
 
 def getAppIcon():
-    return QtGui.QIcon('icons/computer.png')
+    return QtGui.QIcon('icon/cloud.ico')
+
+
+def shorten(text, width=30):
+    if len(text) > width:
+        return str(text[0:width-3]) + '...'
+    return str(text)
 
 
 def timedeltaToString(deltaTime):
@@ -44,12 +56,14 @@ def timedeltaToString(deltaTime):
     minutes, seconds = divmod(remainder, 60)
     return '%s:%s:%s' % (hours, minutes, seconds) 
 
+
 class MainFrame(QtWidgets.QMainWindow):
     MODE_ACTIVE = 2
 
     def __init__(self, dir=[__SSH_DIR__]):
         self.dir = dir
-        self._name = ','.join(self.dir)
+        self._name = ','.join([os.path.basename(os.path.dirname(d)) for d in self.dir])
+
         self._data = []
         for d in self.dir:
             self._data.extend(load_ssh_dir(d))
@@ -65,6 +79,7 @@ class MainFrame(QtWidgets.QMainWindow):
 
         self.tabWidget = QtWidgets.QTabWidget(self)
         self.tabWidget.setTabsClosable(True)
+        self.tabWidget.tabCloseRequested.connect(self.closeTab)
 
         # Main thumbnail widgets
         self.models = []
@@ -74,8 +89,12 @@ class MainFrame(QtWidgets.QMainWindow):
         self._thumbnailWidget = ThumbnailWidget(parent=self, model=model)
         self.table = SSHWidget(self._thumbnailWidget.thumbnailListView.model().getData())
 
-        self.tabWidget.addTab(self._thumbnailWidget, "Thumbnail")
-        self.tabWidget.addTab(self.table, "SSHTable - {}".format(self._name))
+        self.tabWidget.addTab(
+                self._thumbnailWidget,
+                IMAGE_ICON,
+                shorten(self._name)
+        )
+        self.tabWidget.addTab(self.table, TABLE_ICON, shorten(self._name))
         self.setCentralWidget(self.tabWidget)
 
         self.exitAction = QtWidgets.QAction('Exit', self)
@@ -90,21 +109,23 @@ class MainFrame(QtWidgets.QMainWindow):
         fileMenu.addAction(self.loadAction)
         fileMenu.addSeparator()
 
-        self.setWindowTitle("SSH-VNC {}".format(self._name))
+        self.setWindowTitle("SSH-VNC Manager")
+
+    def closeTab(self, index):
+        self.tabWidget.removeTab(index)
 
     def loadDir(self):
         d = QtWidgets.QFileDialog.getExistingDirectory(self, "VPS directory", "", QtWidgets.QFileDialog.ShowDirsOnly)
-        if not d:
-            return
+        if not d: return
         data = load_ssh_dir(d)
+        name = os.path.basename(os.path.dirname(d))
         model = ListModel(data=data, parent=self)
         self.models.append(model)
         thumbnailWidget = ThumbnailWidget(parent=self, model=model)
         table = SSHWidget(model.getData())
-        self.tabWidget.addTab(thumbnailWidget, "Thumbnail - " + str(d))
-        self.tabWidget.addTab(table, "SSHTable - " + str(d))
+        self.tabWidget.addTab(thumbnailWidget, IMAGE_ICON, shorten(name))
+        self.tabWidget.addTab(table, TABLE_ICON, shorten(name))
         return
-
 
     def on_exit(self):
         common.close_all = True
@@ -180,22 +201,22 @@ class MainFrame(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
 
-    DEBUG_FORMAT = """%(asctime)s %(name)-12s %(levelname)-8s
-    [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"""
+    DEBUG_FORMAT = """%(asctime)s %(name)-12s %(levelname)-8s [%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"""
     argv = sys.argv
     logfile = 'log.txt'
-    if len(argv) == 2:
-        logfile = os.path.dirname(argv[1]) + '.' + logfile
+
+    # if len(argv) == 2:
+        # logfile = os.path.dirname(argv[1]) + '.' + logfile
     open(logfile, 'w', encoding='utf-8').write('')
-    logging.basicConfig(
-            filename=logfile,
-            filemode='a',
-            level=logging.DEBUG,
-            format=DEBUG_FORMAT)
-    logging.propagate = True
+    logging.basicConfig(filename=logfile, filemode='w', level=logging.INFO, format=DEBUG_FORMAT)
+    logging.propagate = False
 
     app = QApplication(argv)
     app.setWindowIcon(getAppIcon())
+
+    IMAGE_ICON = QtGui.QIcon('icon/image.ico')
+    TABLE_ICON = QtGui.QIcon('icon/table.ico')
+
     if len(argv) == 2:
         w = MainFrame(dir=[argv[1]])
     elif len(argv) > 2:
@@ -207,7 +228,8 @@ if __name__ == '__main__':
     w.setGeometry(0, 0, 1000, 1000)
 
     if os.path.isfile('stylesheet.css'):
-        with open('stylesheet.css', 'r') as fp:
-            w.setStyleSheet(fp.read())
+        fp = open('stylesheet.css', 'r')
+        w.setStyleSheet(fp.read())
+        fp.close()
     w.show()
     app.exec_()
