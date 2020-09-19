@@ -1,4 +1,8 @@
 #!/bin/bash
+#  client_install.sh Author "sinhnn <sinhnn.92@gmail.com>" Date 18.09.2020
+
+# Description: init shell script for vps
+
 
 function mwget() {
 	wget $*
@@ -34,8 +38,8 @@ sudo apt update \
 
 wget $url -O $ofile \
 	&& sudo apt install -y ./$ofile \
-	
-# xdg-settings set default-web-browser google-chrome.desktop
+
+xdg-settings set default-web-browser google-chrome.desktop
 install_chrome_extension () {
   preferences_dir_path="/opt/google/chrome/extensions"
   pref_file_path="$preferences_dir_path/$1.json"
@@ -46,11 +50,6 @@ install_chrome_extension () {
   echo "}" >> "$pref_file_path"
   echo Added \""$pref_file_path"\" ["$2"]
 }
-# install_chrome_extension "mpbjkejclgfgadiemmefgebjfooflfhl" "Buster: Captcha Solver for Humans"
-
-
-mcurl ftp://35.238.224.22/pub/ytv_ext.tar -o /opt/ytv_ext.tar && tar -xf /opt/ytv_ext.tar --directory=/opt/ && cp -r /opt/ytv_ext/.ytv ~/
-mcurl ftp://35.238.224.22/pub/data.bin -o ~/.ytv/data.bin
 
 # create service for startup
 cat <<EOF > /etc/systemd/system/vncserver.service
@@ -89,6 +88,6 @@ systemctl daemon-reload
 # systemctl start vncserver.service
 /usr/bin/vncserver --I-KNOW-THIS-IS-INSECURE -securitytypes TLSNone,X509None,None -geometry 1280x720 -alwaysshared -blacklisttimeout 0 -localhost yes :1
 
-echo "root:1@3qWe123az" | chpasswd
-sleep 5
-DISPLAY=:1 xdotool mousemove 837 412 click 1
+echo "root:this_is_your_password" | chpasswd
+#sleep 5
+#DISPLAY=:1 xdotool mousemove 837 412 click 1
